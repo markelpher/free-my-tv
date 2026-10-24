@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # What CI runs on every pull request (.github/workflows/check.yml). Run it before you push:
 #
-#   tools/check.sh           # everything
+#   tools/check.sh           # unit tests, everything else
 #   tools/check.sh android   # only the Google TV build (needs what build.sh needs)
 #   tools/check.sh web       # translations, the LG and Samsung packages, and ES5 (needs Python 3 and Node)
+#   tools/check.sh tests     # JVM-only regression tests (needs a JDK, no Android SDK)
 #
 # One difference: here ./build.sh uses the newest SDK and JDK you have, while CI uses build-tools 34, android-34 and
 # JDK 17, as the README says. A call newer than Android 34 can pass here and fail on the pull request.
@@ -11,9 +12,13 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 what="${1:-all}"
 case "$what" in
-  all|android|web) ;;
-  *) echo "Usage: tools/check.sh [all|android|web]" >&2; exit 2 ;;
+  all|android|web|tests) ;;
+  *) echo "Usage: tools/check.sh [all|android|web|tests]" >&2; exit 2 ;;
 esac
+
+if [ "$what" = all ] || [ "$what" = tests ]; then
+  bash tests/run.sh
+fi
 
 if [ "$what" = all ] || [ "$what" = android ]; then
   ./build.sh

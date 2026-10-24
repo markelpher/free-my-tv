@@ -111,13 +111,19 @@ final class Prefs {
 
     static void setTemperature(String v) { put("temperature", v); }
 
-    /** "auto" (dark from sunset to sunrise), "light" or "dark". */
+    /** Moi Dark is the lightweight native dashboard default; the classic automatic and fixed palettes remain selectable. */
     static String theme() {
-        String v = sp().getString("theme", "auto");
-        return v.equals("light") || v.equals("dark") ? v : "auto";
+        return DashboardTheme.normalize(sp().getString("theme", "moi-dark"));
     }
 
     static void setTheme(String v) { put("theme", v); }
+
+    static boolean moiTheme() { return DashboardTheme.isDashboard(theme()); }
+
+    // The launcher and the idle background are separate choices. Keep the previous Free My TV saver unless the person
+    // explicitly selects the TV's own Ambient Mode from Settings.
+    static boolean originalScreensaver() { return sp().getString("screensaver", "freemytv").equals("original"); }
+    static void setOriginalScreensaver(boolean original) { put("screensaver", original ? "original" : "freemytv"); }
 
     // MARK: - City
 
@@ -139,15 +145,14 @@ final class Prefs {
     static boolean weather() { return sp().getBoolean("weather", true); }
     static void setWeather(boolean on) { put("weather", on); }
 
-    static boolean quotes() { return sp().getBoolean("quotes", Config.SHOW_CRYPTO); }
-    static void setQuotes(boolean on) { put("quotes", on); }
+    static boolean quotes() { return false; }
+
 
     /** Your photos (Photos, sent from a computer) on the screensaver and behind the home screen, once imported. */
     static boolean photos() { return sp().getBoolean("photos", true); }
     static void setPhotos(boolean on) { put("photos", on); }
 
-    static boolean coin(int i) { return sp().getBoolean("coin" + i, true); }
-    static void setCoin(int i, boolean on) { put("coin" + i, on); }
+
 
     // MARK: - Shelf
 

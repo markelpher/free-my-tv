@@ -66,20 +66,7 @@ final class HomeData {
     private static volatile boolean activeInDollars;
 
     /** Indexes in COINS of the coins the user has on (and that Binance lists in this currency). */
-    static int[] active() {
-        int[] a = activeCoins;
-        boolean dollars = inDollars;
-        if (a != null && activeVersion == Prefs.version && activeInDollars == dollars) return a;
-        int n = 0;
-        int[] tmp = new int[COINS.length];
-        // The dollar only in reais, not in dollars: USDTUSDT isn't a pair, and Binance would refuse the whole request.
-        for (int i = 0; i < COINS.length; i++) if (Prefs.coin(i) && (i < 3 || CURRENCY.equals("BRL") && !dollars)) tmp[n++] = i;
-        a = java.util.Arrays.copyOf(tmp, n);
-        activeCoins = a;
-        activeVersion = Prefs.version;
-        activeInDollars = dollars;
-        return a;
-    }
+    static int[] active() { return new int[0]; }
 
     /** Settings changed (city, coins): fetch again now. */
     void settingsChanged() {
@@ -93,31 +80,7 @@ final class HomeData {
         return i == 3 ? Ui.tr("Dollar") : COIN_NAMES[i];
     }
 
-    /** Binance.com refuses the US (HTTP 451); Binance.US answers the same call in dollars. */
-    private static final String[] PRICE_HOSTS = {"https://api.binance.com", "https://api.binance.us"};
 
-    private static String pricesPath() {
-        StringBuilder symbols = new StringBuilder();
-        int[] coins = active();
-        for (int i = 0; i < coins.length; i++) symbols.append(i == 0 ? "" : ",").append("%22").append(COINS[coins[i]]).append(quote()).append("%22");
-        return "/api/v3/ticker/24hr?type=MINI&symbols=%5B" + symbols + "%5D";
-    }
-
-    private static String getPrices() throws IOException {
-        IOException failed = null;
-        for (String host : PRICE_HOSTS) {
-            try {
-                return get(host + pricesPath());
-            } catch (IOException e) {
-                // Binance.US has only dollar pairs: its error counts only where Binance.com refuses the US (HTTP 451).
-                // After a timeout or a 5xx there, its HTTP 400 would put the prices in dollars for good.
-                if (failed == null || "HTTP 451".equals(failed.getMessage())) failed = e;
-                // A pair Binance doesn't list (HTTP 400) isn't a refusal: the caller falls back to dollars instead.
-                if ("HTTP 400".equals(e.getMessage())) break;
-            }
-        }
-        throw failed;
-    }
 
     static final class Weather {
         double temp = Double.NaN, max = Double.NaN, min = Double.NaN;
@@ -157,11 +120,7 @@ final class HomeData {
         cache = c.getSharedPreferences("homedata", Context.MODE_PRIVATE);
         inDollars = CURRENCY.equals(cache.getString("dollarsFor", ""));
         try {
-            if (Prefs.quotes()) {
-                String p = cache.getString("prices", null);
-                if (p != null) parsePrices(p);
-                pricesAt = cache.getLong("pricesAt", 0);
-            }
+
             String w = cache.getString("weather", null);
             // The cached forecast is for the city it was fetched for; another city means fetch again.
             if (w != null && weatherPlace().equals(cache.getString("weatherPlace", ""))) {
@@ -178,33 +137,7 @@ final class HomeData {
     /** Fetches whatever is stale. The screen calls this when it appears and every minute while it's visible. */
     void refreshIfStale() {
         long now = System.currentTimeMillis();
-        // A negative age (the TV's clock went back) counts as stale: otherwise the data would freeze.
-        if (!fetchingPrices && coinCount() > 0 && (now - pricesAt > PRICES_EVERY || now < pricesAt) && !failedRecently(pricesFailedAt, now)) {
-            fetchingPrices = true;
-            io.execute(() -> {
-                try {
-                    String body;
-                    try {
-                        body = getPrices();
-                    } catch (IOException e) {
-                        if (inDollars || CURRENCY.equals("USD") || !"HTTP 400".equals(e.getMessage())) throw e;
-                        inDollars = true;
-                        cache.edit().putString("dollarsFor", CURRENCY).apply();
-                        AppLog.w("prices: Binance has no " + CURRENCY + " pairs, using dollars");
-                        body = getPrices();
-                    }
-                    parsePrices(body);
-                    pricesAt = System.currentTimeMillis();
-                    cache.edit().putString("prices", body).putLong("pricesAt", pricesAt).apply();
-                    notifyListeners();
-                } catch (Exception e) {
-                    pricesFailedAt = System.currentTimeMillis();
-                    AppLog.w("prices: " + e.getMessage());
-                } finally {
-                    fetchingPrices = false;
-                }
-            });
-        }
+
         boolean moved = !weatherPlace().equals(weatherFor);
         if (!fetchingWeather && (moved || now - weatherAt > WEATHER_EVERY || now < weatherAt) && !failedRecently(weatherFailedAt, now)) {
             fetchingWeather = true;
@@ -339,6 +272,7 @@ final class HomeData {
      */
     boolean isNight(long now) {
         String theme = Prefs.theme();
+        if (DashboardTheme.isDashboard(theme)) return !DashboardTheme.isLight(theme, false);
         if (theme.equals("dark")) return true;
         if (theme.equals("light")) return false;
         long t = Shaders.timeOfDay(now, 0);

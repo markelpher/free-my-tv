@@ -16,6 +16,7 @@ import android.widget.TextView;
  */
 public class HomeActivity extends Activity {
     private HomeView home;
+
     private int prefsVersion = Prefs.version;   // settings changed while we were away: start over
 
     @Override protected void onCreate(Bundle savedInstanceState) {
@@ -41,6 +42,7 @@ public class HomeActivity extends Activity {
 
     @Override protected void onResume() {
         super.onResume();
+        HomeMode.restoreFreeDreamAfterAmbient(this);
         if (prefsVersion != Prefs.version) {
             prefsVersion = Prefs.version;
             HomeData.get(this).settingsChanged();
@@ -48,10 +50,12 @@ public class HomeActivity extends Activity {
             return;
         }
         if (home != null) home.resume();
+
     }
 
     @Override protected void onPause() {
         if (home != null) home.pause();
+
         super.onPause();
     }
 
@@ -59,10 +63,12 @@ public class HomeActivity extends Activity {
     @Override protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         if (home != null) home.reset(true);
+
     }
 
     @Override protected void onDestroy() {
         if (home != null) home.destroy();
+
         super.onDestroy();
     }
 
@@ -74,6 +80,7 @@ public class HomeActivity extends Activity {
     @Override public boolean dispatchKeyEvent(KeyEvent event) {
         if (RemoteKeys.onKey(this, event)) return true;
         if (home != null && home.onKey(event)) return true;
+
         return super.dispatchKeyEvent(event);
     }
 

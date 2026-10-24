@@ -5,7 +5,7 @@ name: Check
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, feat/native-tcl-dashboard]
 
 permissions:
   contents: read
@@ -16,8 +16,19 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  tests:
+    name: JVM regression tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - run: bash tools/check.sh tests
+
   android:
-    name: Google TV app
+    name: Android TV app
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -29,7 +40,9 @@ jobs:
           java-version: "17"
       - name: Android SDK (build-tools 34, android-34)
         run: |
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$RUNNER_TEMP/sdk" \
+          mkdir -p "$RUNNER_TEMP/sdk"
+          cp -R "$ANDROID_HOME/licenses" "$RUNNER_TEMP/sdk/licenses"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$RUNNER_TEMP/sdk" \
             "build-tools;34.0.0" "platforms;android-34" > /dev/null
           echo "ANDROID_HOME=$RUNNER_TEMP/sdk" >> "$GITHUB_ENV"
       # build.sh makes a throwaway config.properties and signing key: no secrets needed.
