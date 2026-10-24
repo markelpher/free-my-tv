@@ -11,4 +11,9 @@ assert application is not None
 assert application.attrib[a+'label'] == 'Android TV', 'personal app name must be Android TV'
 assert application.attrib[a+'icon'] == '@drawable/icon', 'app icon must resolve to replacement graphic'
 assert (root / 'app/res/drawable-nodpi/icon.png').is_file()
-print('Android TV identity checks passed.')
+services = [node.attrib[a+'name'] for node in application.findall('service')]
+providers = {node.attrib[a+'name']: node for node in application.findall('provider')}
+assert services.count('.DeviceNotificationService') == 1, 'retain PR #222 notifications service'
+assert '.PhotoInbox' in providers, 'retain main photo import provider for Android 11'
+assert providers['.PhotoInbox'].attrib[a+'authorities'] == 'io.freemytv.photos'
+print('Android TV identity and merged component checks passed.')

@@ -33,6 +33,24 @@ var TV = (function () {
     bridge.call(uri, JSON.stringify(params || {}));
   }
 
+  // LG's own screensaver asks every subscribed app first. While Free My TV is on screen and its own screensaver will
+  // take over (`hold`, from home.js), it says no; otherwise, and in the background, the TV's runs as before.
+  var saverBridge = null;
+
+  function holdScreenSaver(hold) {
+    if (!webos || saverBridge) return;
+    saverBridge = new window.PalmServiceBridge();
+    saverBridge.onservicecallback = function (message) {
+      var m = null;
+      try { m = JSON.parse(message); } catch (e) {}
+      if (!m || m.timestamp === undefined) return;
+      luna('luna://com.webos.service.tvpower/power/responseScreenSaverRequest',
+          {clientName: self, ack: !!document.hidden || !hold(), timestamp: m.timestamp});
+    };
+    saverBridge.call('luna://com.webos.service.tvpower/power/registerScreenSaverRequest',
+        JSON.stringify({subscribe: true, clientName: self}));
+  }
+
   // webOS 6 gives Developer Mode apps only the "public" group, which leaves out listLaunchPoints. There the list comes
   // from the TV's remote control API on 127.0.0.1:3000 (the one LG's phone app uses), which takes file:// pages.
   // The TV asks once to allow it; the key it gives back is kept.
@@ -141,14 +159,17 @@ var TV = (function () {
   ];
 
   // Newer webOS (11 tested) denies listLaunchPoints to Developer Mode apps, but still answers getAppLoadStatus for
-  // one app id: these are checked one by one there. Their icons can't be read, so the shelf shows their names.
+  // one app id: these are checked one by one there. Their icons can't be read, so they get our logo where web/icons
+  // has one, as on Samsung, and otherwise their name on the brand's color: [id, title, logo, color].
   var KNOWN = [
-    ['netflix', 'Netflix'], ['youtube.leanback.v4', 'YouTube'], ['amazon', 'Prime Video'],
-    ['com.disney.disneyplus-prod', 'Disney+'], ['com.wbd.stream', 'HBO Max'], ['com.hbo.hbomax', 'Max'],
+    ['netflix', 'Netflix', 'icons/netflix.svg'], ['youtube.leanback.v4', 'YouTube', 'icons/youtube.png'],
+    ['amazon', 'Prime Video', 'icons/prime.png'], ['com.disney.disneyplus-prod', 'Disney+'],
+    ['com.wbd.stream', 'HBO Max', 'icons/max.svg'], ['com.hbo.hbomax', 'Max', 'icons/max.svg'],
     ['com.apple.appletv', 'Apple TV'], ['hulu', 'Hulu'], ['com.peacock.tv', 'Peacock'], ['com.nfl.app', 'NFL'],
-    ['globoplaywebos', 'Globoplay'], ['spotify-beehive', 'Spotify'], ['tv.twitch.tv.starshot.lg', 'Twitch'],
-    ['cdp-30', 'Plex'], ['org.jellyfin.webos', 'Jellyfin'], ['com.crunchyroll.webapp', 'Crunchyroll'],
-    ['com.webos.app.browser', 'Web Browser']
+    ['globoplaywebos', 'Globoplay'], ['spotify-beehive', 'Spotify', 'icons/spotify.svg'],
+    ['tv.twitch.tv.starshot.lg', 'Twitch', '', '#9146FF'], ['cdp-30', 'Plex', '', '#E5A00D'],
+    ['org.jellyfin.webos', 'Jellyfin', 'icons/jellyfin.svg'], ['com.crunchyroll.webapp', 'Crunchyroll', '', '#F47521'],
+    ['com.webos.app.browser', 'Web Browser', '', '#3A7BD5']
   ];
 
   function knownApps(done) {
@@ -161,7 +182,7 @@ var TV = (function () {
     setTimeout(finish, 5000);   // an id that never answers doesn't hold the rest
     KNOWN.forEach(function (k, i) {
       luna('luna://com.webos.applicationManager/getAppLoadStatus', {appId: k[0]}, function (res) {
-        if (res && res.exist) found[i] = {id: k[0], title: k[1], icon: '', color: ''};
+        if (res && res.exist) found[i] = {id: k[0], title: k[1], icon: k[2] || '', color: k[3] || ''};
         if (--left === 0) finish();
       });
     });
@@ -363,6 +384,9 @@ var TV = (function () {
       if (samsung) samsungSettings(done);
       else this.launch('com.palm.app.settings', null, done);
     },
+
+    /** LG: keeps the TV's screensaver away while ours will take over (`hold` says when). */
+    holdScreenSaver: holdScreenSaver,
 
     /** Back on the first screen: back to wherever the person came from. */
     back: function () {

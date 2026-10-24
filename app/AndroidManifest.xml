@@ -184,6 +184,14 @@
             </intent-filter>
         </service>
 
+        <!-- tools/photos.py writes photos here where adb can't reach the app's external folder (Android 11, Fire OS 8);
+             only adb's shell may write (PhotoInbox checks). -->
+        <provider
+            android:name=".PhotoInbox"
+            android:authorities="io.freemytv.photos"
+            android:exported="true" />
+
+
         <receiver
             android:name=".HomeReceiver"
             android:exported="false">
