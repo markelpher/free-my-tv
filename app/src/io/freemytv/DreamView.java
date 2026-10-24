@@ -205,6 +205,14 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
         glassFor = "";
     }
 
+    /** Force the live settings preview to apply the temporary gradient choice on its next frame. */
+    void previewSettingsChanged() {
+        minute = -1;
+        dirty = true;
+        chromeDirty = true;
+        invalidate();
+    }
+
     @Override protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
         worker.shutdownNow();
@@ -264,6 +272,7 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
 
     /** Your photos when they are on, otherwise the picks'. */
     private List<Recs.Pick> photos() {
+        if (!Prefs.saverImages()) return java.util.Collections.emptyList();
         return Photos.on(getContext()) ? Photos.picks(getContext()) : recs.showcase();
     }
 
@@ -310,7 +319,7 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
             float[] light = new float[2];
             try {
                 images = Backdrop.photo(file, PW, PH, light);
-                images[0] = Backdrop.gpu(withScrims(images[0], chosen.photo == null, light[0], light[1]));
+                images[0] = Backdrop.gpu(withScrims(images[0], chosen.photo == null, light[0], light[1], Prefs.saverClockLeft()));
             } catch (Exception | OutOfMemoryError e) {
                 AppLog.w("screensaver: photo for “" + (chosen.photo != null ? chosen.photo.getName() : chosen.title) + "”: " + e.getMessage());
             }
@@ -430,9 +439,14 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
             date = Ui.date(now);
             dirty = true;
             chromeDirty = true;
+            Shaders.sky(scene.palette, now, data.weather.sunrise, data.weather.sunset);
+            if ("classic".equals(Prefs.gradient())) Shaders.dream(scene.palette);
+            else Shaders.gradient(scene.palette, Prefs.gradient(), Shaders.isNight(now, data.weather.sunrise, data.weather.sunset));
+            scene.applyPalette();
         }
         if (running) advance(up);
-        if (!glassFor.equals(clock)) buildGlass(clock);
+        String glassKey = clock + (Prefs.saverClockLeft() ? "L" : "R");
+        if (!glassFor.equals(glassKey)) buildGlass(clock);
 
         float first = current == null ? 0 : fadeIn(up - firstAt, FIRST_MS);
         if (current == null || first < 1) {
@@ -467,7 +481,7 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
      * background): each frame draws only the photo (the TV's GPU feels every full-screen layer). With the slow zoom,
      * they move a little along with the photo, which makes no difference to the text.
      */
-    private static Bitmap withScrims(Bitmap photo, boolean withCaption, float lightCaption, float lightClock) {
+    private static Bitmap withScrims(Bitmap photo, boolean withCaption, float lightCaption, float lightClock, boolean left) {
         int w = photo.getWidth(), h = photo.getHeight();
         Canvas c = new Canvas(photo);
         Paint p = new Paint(Paint.DITHER_FLAG);
@@ -487,7 +501,7 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
         p.setShader(new LinearGradient(0, 0, 0, h * 0.3f, new int[] {black(0.3f), black(0.075f), 0},
                 new float[] {0, 0.45f, 1}, Shader.TileMode.CLAMP));
         c.drawRect(0, 0, w, h * 0.3f, p);
-        float cx = w * 0.86f, cy = h * 0.15f;
+        float cx = w * (left ? 0.14f : 0.86f), cy = h * 0.15f;
         RadialGradient clockSide = new RadialGradient(cx, cy, w * 0.36f,
                 new int[] {black(corner), black(0.6f * corner), black(0.15f * corner), 0},
                 new float[] {0, 0.42f, 0.75f, 1}, Shader.TileMode.CLAMP);
@@ -495,7 +509,7 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
         mc.setScale(1, 0.72f, cx, cy);
         clockSide.setLocalMatrix(mc);
         p.setShader(clockSide);
-        c.drawRect(w * 0.5f, 0, w, cy + w * 0.36f * 0.72f, p);
+        c.drawRect(left ? 0 : w * 0.5f, 0, left ? w * 0.5f : w, cy + w * 0.36f * 0.72f, p);
         return photo;
     }
 
@@ -512,20 +526,21 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
     private void recordChrome() {
         Canvas c = chrome.beginRecording(w, h);
         try {
-            float right = RIGHT * k;
-            float x = right;
+            boolean left = Prefs.saverClockLeft();
+            float edge = (left ? MARGIN : RIGHT) * k;
+            float x = edge;
             HomeData.Weather wx = data.weather;
             if (!Double.isNaN(wx.temp) && Prefs.weather()) {
                 String temp = HomeData.degrees(wx.temp);
                 float tw = cornerDate.measureText(temp);
-                c.drawText(temp, x - tw, DATE_BASE * k, cornerDate);
-                x -= tw + 10 * k;
+                c.drawText(temp, left ? x : x - tw, DATE_BASE * k, cornerDate);
+                x += (left ? 1 : -1) * (tw + 10 * k);
                 String symbol = Symbols.weather(wx.code, wx.isDay);
                 float size = 30 * k, sw = Symbols.width(getContext(), symbol, size);
-                Symbols.draw(getContext(), c, symbol, x - sw / 2, DATE_BASE * k - Ui.halfCap(cornerDate), size, 0xEBFFFFFF);
-                x -= sw + 26 * k;
+                Symbols.draw(getContext(), c, symbol, x + (left ? sw / 2 : -sw / 2), DATE_BASE * k - Ui.halfCap(cornerDate), size, 0xEBFFFFFF);
+                x += (left ? 1 : -1) * (sw + 26 * k);
             }
-            c.drawText(date, x - cornerDate.measureText(date), DATE_BASE * k, cornerDate);
+            c.drawText(date, left ? x : x - cornerDate.measureText(date), DATE_BASE * k, cornerDate);
 
             Glass g = glass;
             if (g != null && glassShader != null) {
@@ -535,7 +550,7 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
             } else {
                 Rect ink = new Rect();
                 cornerClock.getTextBounds(clock, 0, clock.length(), ink);
-                c.drawText(clock, right - ink.right, CLOCK_TOP * k - ink.top, cornerClock);
+                c.drawText(clock, left ? MARGIN * k - ink.left : RIGHT * k - ink.right, CLOCK_TOP * k - ink.top, cornerClock);
             }
 
             // Compact prices under the clock, right-aligned.
@@ -551,7 +566,7 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
                 glyphs[i] = Glyphs.width(getContext(), HomeData.COINS[coins[i]], cap);
                 total += glyphs[i] + gap + cornerQuote.measureText(values[i]);
             }
-            float qx = right - total;
+            float qx = left ? edge : edge - total;
             for (int i = 0; i < n; i++) {
                 Glyphs.coin(getContext(), c, HomeData.COINS[coins[i]], qx + glyphs[i] / 2, base - cap / 2, cap, 0xA6FFFFFF);
                 qx += glyphs[i] + gap;
@@ -559,7 +574,7 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
                 qx += cornerQuote.measureText(values[i]) + spacing;
             }
             String stale = HomeData.staleness(data.pricesAt, 5 * 60_000L);
-            if (!stale.isEmpty() && n > 0) c.drawText(stale, right - total - 24 * k - cornerStale.measureText(stale), base, cornerStale);
+            if (!stale.isEmpty() && n > 0) c.drawText(stale, left ? edge + total + 24 * k : edge - total - 24 * k - cornerStale.measureText(stale), base, cornerStale);
         } finally {
             chrome.endRecording();
         }
@@ -585,7 +600,9 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
 
     /** Builds the glass clock's digits in the background (once a minute) and swaps them in when they're ready. */
     private void buildGlass(String text) {
-        glassFor = text;
+        boolean left = Prefs.saverClockLeft();
+        final String key = text + (left ? "L" : "R");
+        glassFor = key;
         if (glassShader == null || text.isEmpty()) {
             chromeDirty = true;
             return;
@@ -593,12 +610,14 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
         final Paint paint = new Paint(cornerClock);
         paint.clearShadowLayer();
         paint.setColor(0xFFFFFFFF);
-        final float right = RIGHT * k, top = CLOCK_TOP * k, scale = k;
+        Rect bounds = new Rect();
+        paint.getTextBounds(text, 0, text.length(), bounds);
+        final float right = (left ? MARGIN + bounds.width() : RIGHT) * k, top = CLOCK_TOP * k, scale = k;
         final int gen = generation;
         worker.execute(() -> {
             Glass g = makeGlass(text, paint, right, top, scale);
             handler.post(() -> {
-                if (gen != generation || !text.equals(glassFor)) return;
+                if (gen != generation || !key.equals(glassFor)) return;
                 glass = g;
                 glassShader.setInputShader("slope", nearest(g.slope));
                 glassShader.setInputShader("cover", nearest(g.cover));

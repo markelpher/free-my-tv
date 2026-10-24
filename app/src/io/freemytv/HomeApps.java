@@ -228,7 +228,7 @@ final class HomeApps {
     // MARK: - Top buttons (the round ones at the top right)
 
     static final String TOP_LIVE = "live", TOP_INPUTS = "inputs", TOP_NOTIFICATIONS = "notifications",
-            TOP_SETTINGS = "settings", TOP_TV_SETTINGS = "tv-settings";
+            TOP_SETTINGS = "settings";
     /** The original themes keep their standard trio. Moi Dark owns a separate, non-duplicated trio. */
     static final List<String> TOP_DEFAULT = Collections.unmodifiableList(java.util.Arrays.asList(TOP_LIVE, TOP_INPUTS, TOP_SETTINGS));
     static final int MAX_TOP = TOP_DEFAULT.size();
@@ -254,7 +254,6 @@ final class HomeApps {
         List<Item> items = new ArrayList<>();
         items.add(topButton(TOP_SETTINGS));
         items.add(topButton(TOP_NOTIFICATIONS));
-        items.add(topButton(TOP_TV_SETTINGS));
         return items;
     }
 
@@ -263,7 +262,6 @@ final class HomeApps {
             case TOP_LIVE: return action(LIVE_TV, TOP_LIVE, Ui.tr("light|Live TV"), "live_tv");
             case TOP_INPUTS: return action(INPUTS, TOP_INPUTS, Ui.tr("HDMI Inputs"), "hdmi");
             case TOP_NOTIFICATIONS: return action(NOTIFICATIONS, TOP_NOTIFICATIONS, Ui.tr("Notifications"), "bell");
-            case TOP_TV_SETTINGS: return action(ANDROID_SETTINGS, TOP_TV_SETTINGS, "Android TV", "android");
             default: return action(SETTINGS, TOP_SETTINGS, Ui.tr("light|Settings"), "settings");
         }
     }
@@ -315,7 +313,6 @@ final class HomeApps {
         List<Item> items = new ArrayList<>();
         items.add(shortcut(ALL_APPS, "all", Ui.tr("All Apps"), "apps"));
         items.add(shortcut(SETTINGS, "settings", Ui.tr("Home Settings"), "settings"));
-        items.add(shortcut(ANDROID_SETTINGS, "tv-settings", "Android TV", "android"));
         // HY300 projectors (Hotack, Allwinner H713): keystone and focus live in the maker's settings app, and the
         // stock home screen was the only way to its Miracast receiver. Each shows only where the TV has it.
         device(c, items, "keystone", Ui.tr("Keystone"), "keystone", new Intent("action.htcsettings.prjsettings"));
@@ -484,7 +481,7 @@ final class HomeApps {
         synchronized (HomeApps.class) {
             TILES.keySet().removeIf(k -> k.contains(".") && !seen.contains(k));
         }
-        items.add(special(c, SETTINGS, "freemytv-settings", "Android TV", "android"));
+        items.add(special(c, SETTINGS, "freemytv-settings", Ui.tr("Settings"), "settings"));
         return items;
     }
 

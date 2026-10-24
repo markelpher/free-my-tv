@@ -40,6 +40,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.lang.ref.WeakReference;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Consumer;
@@ -61,6 +62,7 @@ import java.util.function.Consumer;
  * redraws what changed.
  */
 final class HomeView extends ViewGroup implements Choreographer.FrameCallback, HomeData.Listener, Recs.Listener {
+    private static WeakReference<HomeView> preview = new WeakReference<>(null);
     // tvOS grid (Human Interface Guidelines): content inside the safe area, 80 px from the sides and 60 from top and
     // bottom; 40 px between items; 7 columns of 217 px (the apps). The shelf glass extends 36 px past the tiles (the
     // same padding on all four sides) and the tile corners are concentric with it (glass radius = radius + padding).
@@ -371,6 +373,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
 
     HomeView(Activity a) {
         super(a);
+        preview = new WeakReference<>(this);
         activity = a;
         data = HomeData.get(a);
         recs = Recs.get(a);
@@ -472,6 +475,31 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         pause();
         if (launcherApps != null) launcherApps.unregisterCallback(packages);
         click.release();
+        if (preview.get() == this) preview = new WeakReference<>(null);
+    }
+
+    /** Draws the actual, paused home screen into a settings preview; no mock or separate home instance. */
+    static boolean drawLivePreview(Canvas canvas, RectF bounds) {
+        HomeView home = preview.get();
+        if (home == null || home.getWidth() <= 0 || home.getHeight() <= 0) return false;
+        home.updatePalette();
+        home.invalidateAll();
+        int save = canvas.save();
+        canvas.clipRect(bounds);
+        canvas.translate(bounds.left, bounds.top);
+        canvas.scale(bounds.width() / home.getWidth(), bounds.height() / home.getHeight());
+        home.draw(canvas);
+        canvas.restoreToCount(save);
+        return true;
+    }
+
+    /** Settings has changed the ordered shelf/buttons; refresh this paused view before drawing it into the preview. */
+    static void refreshLivePreview() {
+        HomeView home = preview.get();
+        if (home == null) return;
+        home.appsStale = true;
+        home.reload();
+        home.invalidateAll();
     }
 
     /** Starting state (Home pressed while the home screen is showing): first app focused, drawer and sheet closed. */
@@ -797,6 +825,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private void updatePalette() {
         HomeData.Weather wx = data.weather;
         Shaders.sky(scene.palette, System.currentTimeMillis(), wx.sunrise, wx.sunset);
+        Shaders.gradient(scene.palette, Prefs.homeGradient(), Shaders.isNight(System.currentTimeMillis(), wx.sunrise, wx.sunset));
         scene.applyPalette();
     }
 
@@ -3396,7 +3425,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     }
 
     private boolean picksOn() {
-        return Recs.hasKey(getContext());
+        return Prefs.recommendations() && Recs.hasKey(getContext());
     }
 
     private void drawClock(Canvas c) {

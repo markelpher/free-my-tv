@@ -342,6 +342,23 @@ final class Shaders {
         out.set(NIGHT[0], NIGHT[1], NIGHT[2]);
     }
 
+    static boolean isNight(long now, long sunrise, long sunset) {
+        long t = timeOfDay(now, 0);
+        long rise = timeOfDay(sunrise, 6 * 60 * 60_000L);
+        long set = timeOfDay(sunset, 18 * 60 * 60_000L);
+        return t < rise || t >= set;
+    }
+
+    /** Optional color families: each shifts smoothly between its own day and night tones. */
+    static void gradient(Palette out, String style, boolean night) {
+        if ("ocean".equals(style)) out.set(night ? 0x061A2B : 0x176B9B,
+                night ? 0x124A68 : 0x42B8C5, night ? 0x327B91 : 0xA1E5D8);
+        else if ("sunset".equals(style)) out.set(night ? 0x211433 : 0x8E3855,
+                night ? 0x63304D : 0xE87558, night ? 0xA45165 : 0xFFC477);
+        else if ("aurora".equals(style)) out.set(night ? 0x080F2B : 0x184D86,
+                night ? 0x254B83 : 0x37A3B7, night ? 0x7653A8 : 0x9CE7CA);
+    }
+
     private static int mix(int a, int b, float f) {
         int r = Math.round(((a >> 16) & 255) * (1 - f) + ((b >> 16) & 255) * f);
         int g = Math.round(((a >> 8) & 255) * (1 - f) + ((b >> 8) & 255) * f);

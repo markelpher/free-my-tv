@@ -54,6 +54,7 @@ final class Prefs {
     static volatile int version;
 
     private static Context app;
+    private static String previewKey, previewValue;
 
     static void init(Context c) {
         app = c.getApplicationContext();
@@ -68,6 +69,14 @@ final class Prefs {
 
     private static SharedPreferences sp() {
         return app.getSharedPreferences("settings", Context.MODE_PRIVATE);
+    }
+
+    static void preview(String key, String value) { previewKey = key; previewValue = value; }
+    static void clearPreview() { previewKey = previewValue = null; }
+    private static String previewValue(String key, String saved) { return key.equals(previewKey) ? previewValue : saved; }
+    private static boolean previewBoolean(String key, boolean saved) {
+        String value = previewValue(key, saved ? "on" : "off");
+        return value.equals("on") || value.equals("true");
     }
 
     /**
@@ -113,10 +122,32 @@ final class Prefs {
 
     /** Moi Dark is the lightweight native dashboard default; the classic automatic and fixed palettes remain selectable. */
     static String theme() {
-        return DashboardTheme.normalize(sp().getString("theme", "moi-dark"));
+        return DashboardTheme.normalize(previewValue("theme", sp().getString("theme", "moi-dark")));
     }
 
     static void setTheme(String v) { put("theme", v); }
+
+    /** Home-screen gradient; classic keeps its existing sky palette. */
+    static String homeGradient() {
+        String v = previewValue("homeGradient", sp().getString("homeGradient", "classic"));
+        return v.equals("ocean") || v.equals("sunset") || v.equals("aurora") ? v : "classic";
+    }
+    static void setHomeGradient(String v) { put("homeGradient", v); }
+
+    /** Screensaver background gradient. */
+    static String gradient() {
+        String v = previewValue("gradient", sp().getString("gradient", "classic"));
+        return v.equals("ocean") || v.equals("sunset") || v.equals("aurora") ? v : "classic";
+    }
+    static void setGradient(String v) { put("gradient", v); }
+
+    /** Screensaver clock position. */
+    static boolean saverClockLeft() { return previewBoolean("saverClockLeft", sp().getBoolean("saverClockLeft", false)); }
+    static void setSaverClockLeft(boolean left) { put("saverClockLeft", left); }
+
+    /** Whether the screensaver rotates through personal photos or recommendations. */
+    static boolean saverImages() { return previewBoolean("saverImages", sp().getBoolean("saverImages", true)); }
+    static void setSaverImages(boolean on) { put("saverImages", on); }
 
     static boolean moiTheme() { return DashboardTheme.isDashboard(theme()); }
 
@@ -146,14 +177,19 @@ final class Prefs {
 
     // MARK: - Widgets and coins
 
-    static boolean weather() { return sp().getBoolean("weather", true); }
+    static boolean weather() { return previewBoolean("weather", sp().getBoolean("weather", true)); }
     static void setWeather(boolean on) { put("weather", on); }
+
+    static boolean recommendations() { return previewBoolean("recommendations", sp().getBoolean("recommendations", true)); }
+    static void setRecommendations(boolean on) { put("recommendations", on); }
+    static boolean comparison() { return previewBoolean("comparison", sp().getBoolean("comparison", true)); }
+    static void setComparison(boolean on) { put("comparison", on); }
 
     static boolean quotes() { return false; }
 
 
     /** Your photos (Photos, sent from a computer) on the screensaver and behind the home screen, once imported. */
-    static boolean photos() { return sp().getBoolean("photos", true); }
+    static boolean photos() { return previewBoolean("photos", sp().getBoolean("photos", true)); }
     static void setPhotos(boolean on) { put("photos", on); }
 
 

@@ -13,7 +13,7 @@ assert 'if (!moi() && (tileRects[i].right' in view, 'Moi grid must not be culled
 assert 'DeviceNotificationService' in manifest
 assert 'HomeMode.restoreFreeDreamAfterAmbient(this)' in home
 assert 'if (moi()) return;' in view[view.index('private void revealShelf'):], 'grid must never scroll horizontally'
-assert '"Android TV", "android"' in apps
+assert 'special(c, SETTINGS, "freemytv-settings", Ui.tr("Settings"), "settings")' in apps
 for path in src.glob('*.java'):
     s = path.read_text(encoding='utf-8')
     assert '<<<<<<< ours' not in s and '>>>>>>> theirs' not in s, path
