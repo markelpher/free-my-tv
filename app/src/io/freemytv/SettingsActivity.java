@@ -199,7 +199,7 @@ public class SettingsActivity extends Activity {
             scene.setMotion(0.5f, 0.2f);
             scene.applyPalette();
             setFocusable(true);
-            setContentDescription("Android TV");
+            setContentDescription("TCL | Android TV");
             // TalkBack: one item per row, id = row + 1.
             spoken = new Spoken(this, new Spoken.Source() {
                 @Override public void items(List<Integer> out) { for (int i = 1; i <= rowCount(); i++) out.add(i); }
@@ -403,7 +403,7 @@ public class SettingsActivity extends Activity {
             // On the left: big symbol, title, description.
             float cx = 500 * k;
             Symbols.draw(getContext(), c, "android", cx, 400 * k, 150 * k, 0xEBFFFFFF);
-            c.drawText("Android TV", cx, 612 * k, title);
+            c.drawText("TCL | Android TV", cx, 612 * k, title);
             c.drawText(Ui.tr("Your TV's home screen and screensaver"), cx, 660 * k, subtitle);
             c.drawText(versionName(getContext()), cx, 704 * k, version);
 

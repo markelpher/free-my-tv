@@ -1,5 +1,5 @@
 # Public APKs use a generic config and the existing personal signing identity.
-name: Release Android TV
+name: Release Free My TV
 on:
   push:
     tags: ["v*"]
@@ -58,7 +58,7 @@ jobs:
         run: |
           set -euo pipefail
           gh release create "$GITHUB_REF_NAME" "FreeMyTV-${GITHUB_REF_NAME}.apk" SHA256SUMS.txt \
-            --repo "$GITHUB_REPOSITORY" --title "Android TV $GITHUB_REF_NAME" --generate-notes --verify-tag
+            --repo "$GITHUB_REPOSITORY" --title "Free My TV $GITHUB_REF_NAME" --generate-notes --verify-tag
       - name: Remove staged key and build config
         if: always()
         run: rm -f freemytv.keystore config.properties && rm -rf out
