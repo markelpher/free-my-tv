@@ -716,6 +716,9 @@ public class SettingsActivity extends Activity {
             l.add(Ui.tr("Navigation sounds"));
             l.add(Ui.tr("Weather widget"));
             l.add(Ui.tr("City"));
+            if (StartupBrand.supports(android.os.Build.MANUFACTURER, android.os.Build.BRAND)) {
+                l.add(Ui.tr("TCL startup fallback"));
+            }
 
             return l.toArray(new String[0]);
         }
@@ -737,6 +740,7 @@ public class SettingsActivity extends Activity {
             v[4] = onOff(Prefs.sounds());
             v[5] = onOff(Prefs.weather());
             v[CITY_ROW] = !cityStatus.isEmpty() ? cityStatus : Prefs.city().isEmpty() ? "—" : Prefs.city();
+            if (v.length > CITY_ROW + 1) v[CITY_ROW + 1] = onOff(Prefs.tclStartup());
 
             return v;
         }
@@ -828,6 +832,7 @@ public class SettingsActivity extends Activity {
                 case 4: Prefs.setSounds(!Prefs.sounds()); break;
                 case 5: Prefs.setWeather(!Prefs.weather()); break;
                 case CITY_ROW: return;
+                case CITY_ROW + 1: Prefs.setTclStartup(!Prefs.tclStartup()); break;
                 default: return;
             }
             HomeData.get(getContext()).settingsChanged();

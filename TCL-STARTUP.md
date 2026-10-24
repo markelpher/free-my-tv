@@ -1,6 +1,8 @@
 # Abertura TCL
 
-A tela com o logo TCL aparece por aproximadamente 1,2 segundo na primeira abertura da tela inicial em cada processo do launcher, somente quando `Build.MANUFACTURER` ou `Build.BRAND` é exatamente TCL (sem diferenciar maiúsculas ou espaços externos).
+A abertura extra fica **desativada por padrão**, pois a animação nativa da TCL já funciona normalmente. O app não tem confirmação confiável de que o logo do sistema foi mostrado: não há detecção automática de falha do boot nativo.
+
+Somente em TVs TCL, a opção **Configurações da tela inicial → Abertura TCL alternativa** permite ativar manualmente o fallback quando desejado. Se ela estiver ligada, o logo aparece por aproximadamente 1,2 segundo na primeira abertura da home em cada processo do launcher. `Build.MANUFACTURER` ou `Build.BRAND` deve ser exatamente TCL (sem diferenciar maiúsculas ou espaços externos).
 
 - Não reaparece ao apertar Home ou ao voltar das configurações.
 - Pode reaparecer se o Android encerrar o processo e o launcher iniciar novamente.

@@ -47,7 +47,7 @@ public class HomeActivity extends Activity {
         }
         Ui.init(this);
         home = new HomeView(this);
-        if (STARTUP_BRAND.take(Build.MANUFACTURER, Build.BRAND)) {
+        if (STARTUP_BRAND.take(Build.MANUFACTURER, Build.BRAND, Prefs.tclStartup())) {
             startupFrame = new FrameLayout(this);
             startupFrame.addView(home, new FrameLayout.LayoutParams(-1, -1));
             startup = new ImageView(this);

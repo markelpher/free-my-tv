@@ -3,6 +3,9 @@ source = (Path(__file__).resolve().parents[1] / 'app/src/io/freemytv/SettingsAct
 assert 'Symbols.draw(getContext(), c, "android", cx' in source
 assert 'c.drawText("TCL | Android TV", cx' in source
 assert 'setContentDescription("TCL | Android TV")' in source
+prefs = (Path(__file__).resolve().parents[1] / 'app/src/io/freemytv/Prefs.java').read_text(encoding='utf-8')
+assert 'getBoolean("tclStartupFallback", false)' in prefs, 'native boot must not be duplicated by default'
+assert 'l.add(Ui.tr("TCL startup fallback"));' in source
 workflow = (Path(__file__).resolve().parents[1] / '.github/workflows/release.yml').read_text(encoding='utf-8')
 assert '--title "Free My TV $GITHUB_REF_NAME"' in workflow
 assert 'if (Prefs.moiTheme()) c.drawColor(0xFF09090B)' in source

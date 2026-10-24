@@ -120,6 +120,10 @@ final class Prefs {
 
     static boolean moiTheme() { return DashboardTheme.isDashboard(theme()); }
 
+    /** Manual fallback only: the app cannot tell whether the system's native boot logo was displayed. */
+    static boolean tclStartup() { return sp().getBoolean("tclStartupFallback", false); }
+    static void setTclStartup(boolean on) { put("tclStartupFallback", on); }
+
     // The launcher and the idle background are separate choices. Keep the previous Free My TV saver unless the person
     // explicitly selects the TV's own Ambient Mode from Settings.
     static boolean originalScreensaver() { return sp().getString("screensaver", "freemytv").equals("original"); }

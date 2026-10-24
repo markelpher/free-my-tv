@@ -4,10 +4,14 @@ package io.freemytv;
 final class StartupBrand {
     private boolean shown;
 
-    boolean take(String manufacturer, String brand) {
-        if (shown || !(isTcl(manufacturer) || isTcl(brand))) return false;
+    boolean take(String manufacturer, String brand, boolean fallbackEnabled) {
+        if (!fallbackEnabled || shown || !supports(manufacturer, brand)) return false;
         shown = true;
         return true;
+    }
+
+    static boolean supports(String manufacturer, String brand) {
+        return isTcl(manufacturer) || isTcl(brand);
     }
 
     private static boolean isTcl(String value) {
