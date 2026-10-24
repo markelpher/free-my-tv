@@ -29,6 +29,6 @@ done
 printf 'JVM regression suites: %s passed; pure helper classes: %s. (Not line/branch or Android UI coverage.)\n' \
   "${#tests[@]}" "${#helpers[@]}"
 
-for smoke in tests/dashboard_integration.py tests/android_identity.py tests/settings_identity.py tests/home_localization.py tests/no_crypto.py; do
+for smoke in tests/dashboard_integration.py tests/android_identity.py tests/settings_identity.py tests/home_localization.py tests/no_crypto.py tests/input_order.py; do
   python3 "$smoke"
 done

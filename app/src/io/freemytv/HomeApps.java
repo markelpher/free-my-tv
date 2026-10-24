@@ -347,13 +347,13 @@ final class HomeApps {
         return it;
     }
 
-    /** For the bottom drawer: Live TV is always visible; without a tuner/cable it is a dimmed, non-launchable input. */
+    /** Live TV comes first, followed by HDMI inputs; without a tuner it stays visible but dimmed. */
     static List<Item> allInputs(Context c) {
         List<Item> items = new ArrayList<>();
         items.addAll(inputs(c, true));
         Item live = shortcut(LIVE_TV, "live", Ui.tr("Live TV"), "tv");
         live.connected = liveTv(c) != null;
-        items.add(live);
+        items.add(0, live);
         return items;
     }
 
