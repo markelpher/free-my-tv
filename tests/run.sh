@@ -10,7 +10,7 @@ mkdir -p "$OUT"
 trap 'rm -rf "$OUT"' EXIT
 
 # Keep this list limited to pure helpers; Android-dependent classes need a separate test harness.
-helpers=(DashboardTheme)
+helpers=(DashboardTheme StartupBrand)
 sources=()
 for helper in "${helpers[@]}"; do sources+=("app/src/io/freemytv/$helper.java"); done
 
