@@ -54,7 +54,7 @@ final class Prefs {
     static volatile int version;
 
     private static Context app;
-    private static String previewKey, previewValue;
+    private static String previewKey, previewValue, previewTheme, previewHomeGradient, previewGradient, previewHomeDesign;
 
     static void init(Context c) {
         app = c.getApplicationContext();
@@ -71,8 +71,20 @@ final class Prefs {
         return app.getSharedPreferences("settings", Context.MODE_PRIVATE);
     }
 
-    static void preview(String key, String value) { previewKey = key; previewValue = value; }
-    static void clearPreview() { previewKey = previewValue = null; }
+    static void preview(String key, String value) {
+        previewKey = key; previewValue = value;
+        previewTheme = previewHomeGradient = previewGradient = previewHomeDesign = null;
+    }
+    static void previewThemePreset(String theme, String gradient) {
+        previewKey = previewValue = null;
+        previewTheme = theme; previewHomeGradient = previewGradient = gradient; previewHomeDesign = null;
+    }
+    static void previewHomeDesign(String design) {
+        previewKey = previewValue = null;
+        previewHomeDesign = design;
+        previewTheme = previewHomeGradient = previewGradient = null;
+    }
+    static void clearPreview() { previewKey = previewValue = previewTheme = previewHomeGradient = previewGradient = previewHomeDesign = null; }
     private static String previewValue(String key, String saved) { return key.equals(previewKey) ? previewValue : saved; }
     private static boolean previewBoolean(String key, boolean saved) {
         String value = previewValue(key, saved ? "on" : "off");
@@ -122,24 +134,35 @@ final class Prefs {
 
     /** Moi Dark is the lightweight native dashboard default; the classic automatic and fixed palettes remain selectable. */
     static String theme() {
-        return DashboardTheme.normalize(previewValue("theme", sp().getString("theme", "moi-dark")));
+        return DashboardTheme.normalize(previewTheme != null ? previewTheme : previewValue("theme", sp().getString("theme", "moi-dark")));
     }
 
     static void setTheme(String v) { put("theme", v); }
 
     /** Home-screen gradient; classic keeps its existing sky palette. */
     static String homeGradient() {
-        String v = previewValue("homeGradient", sp().getString("homeGradient", "classic"));
-        return v.equals("ocean") || v.equals("sunset") || v.equals("aurora") ? v : "classic";
+        String v = previewHomeGradient != null ? previewHomeGradient : previewValue("homeGradient", sp().getString("homeGradient", "classic"));
+        return validGradient(v) ? v : "classic";
     }
     static void setHomeGradient(String v) { put("homeGradient", v); }
 
     /** Screensaver background gradient. */
     static String gradient() {
-        String v = previewValue("gradient", sp().getString("gradient", "classic"));
-        return v.equals("ocean") || v.equals("sunset") || v.equals("aurora") ? v : "classic";
+        String v = previewGradient != null ? previewGradient : previewValue("gradient", sp().getString("gradient", "classic"));
+        return validGradient(v) ? v : "classic";
     }
     static void setGradient(String v) { put("gradient", v); }
+
+    static String homeDesign() {
+        String value = previewHomeDesign != null ? previewHomeDesign : sp().getString("homeDesign", "dashboard");
+        return value.equals("apps") || value.equals("weather") ? value : "dashboard";
+    }
+    static void setHomeDesign(String value) { put("homeDesign", value); }
+
+    private static boolean validGradient(String value) {
+        return value.equals("classic") || value.equals("aurora") || value.equals("ocean") || value.equals("sunset")
+                || value.equals("forest") || value.equals("ember") || value.equals("lavender") || value.equals("midnight");
+    }
 
     /** Screensaver clock position. */
     static boolean saverClockLeft() { return previewBoolean("saverClockLeft", sp().getBoolean("saverClockLeft", false)); }
@@ -154,6 +177,8 @@ final class Prefs {
     /** Manual fallback only: the app cannot tell whether the system's native boot logo was displayed. */
     static boolean tclStartup() { return sp().getBoolean("tclStartupFallback", false); }
     static void setTclStartup(boolean on) { put("tclStartupFallback", on); }
+    static boolean updateChecks() { return sp().getBoolean("updateChecks", true); }
+    static void setUpdateChecks(boolean on) { put("updateChecks", on); }
 
     // The launcher and the idle background are separate choices. Keep the previous Free My TV saver unless the person
     // explicitly selects the TV's own Ambient Mode from Settings.
@@ -252,6 +277,20 @@ final class Prefs {
         StringBuilder sb = new StringBuilder();
         for (String p : keys) sb.append(sb.length() == 0 ? "" : ",").append(p);
         put("topButtons", sb.toString());
+    }
+
+    static List<String> moiTopButtons() {
+        String v = sp().getString("moiTopButtons", null);
+        if (v == null) return null;
+        List<String> out = new ArrayList<>();
+        for (String p : v.split(",")) if (!p.isEmpty()) out.add(p);
+        return out;
+    }
+
+    static void setMoiTopButtons(List<String> keys) {
+        StringBuilder sb = new StringBuilder();
+        for (String p : keys) sb.append(sb.length() == 0 ? "" : ",").append(p);
+        put("moiTopButtons", sb.toString());
     }
 
     // MARK: - Remote buttons

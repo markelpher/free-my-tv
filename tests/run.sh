@@ -10,7 +10,7 @@ mkdir -p "$OUT"
 trap 'rm -rf "$OUT"' EXIT
 
 # Keep this list limited to pure helpers; Android-dependent classes need a separate test harness.
-helpers=(DashboardTheme StartupBrand)
+helpers=(DashboardTheme StartupBrand TvIdentity)
 sources=()
 for helper in "${helpers[@]}"; do sources+=("app/src/io/freemytv/$helper.java"); done
 
@@ -29,6 +29,6 @@ done
 printf 'JVM regression suites: %s passed; pure helper classes: %s. (Not line/branch or Android UI coverage.)\n' \
   "${#tests[@]}" "${#helpers[@]}"
 
-for smoke in tests/dashboard_integration.py tests/android_identity.py tests/settings_identity.py tests/home_localization.py tests/no_crypto.py tests/input_order.py; do
+for smoke in tests/dashboard_integration.py tests/android_identity.py tests/settings_identity.py tests/home_localization.py tests/no_crypto.py tests/input_order.py tests/personalization.py; do
   python3 "$smoke"
 done

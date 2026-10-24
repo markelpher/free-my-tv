@@ -231,6 +231,7 @@ final class HomeApps {
             TOP_SETTINGS = "settings";
     /** The original themes keep their standard trio. Moi Dark owns a separate, non-duplicated trio. */
     static final List<String> TOP_DEFAULT = Collections.unmodifiableList(java.util.Arrays.asList(TOP_LIVE, TOP_INPUTS, TOP_SETTINGS));
+    static final List<String> MOI_TOP_DEFAULT = Collections.unmodifiableList(java.util.Arrays.asList(TOP_SETTINGS, TOP_NOTIFICATIONS));
     static final int MAX_TOP = TOP_DEFAULT.size();
 
     /** The keys of the top buttons, in order (Settings > Top Buttons; by default Live TV, HDMI Inputs, Settings). */
@@ -239,6 +240,7 @@ final class HomeApps {
         if (saved == null) return TOP_DEFAULT;
         List<String> keys = new ArrayList<>();
         for (String key : saved) if (TOP_DEFAULT.contains(key) && !keys.contains(key)) keys.add(key);
+        if (!keys.contains(TOP_SETTINGS)) keys.add(TOP_SETTINGS);
         return keys;
     }
 
@@ -249,12 +251,20 @@ final class HomeApps {
         return items;
     }
 
-    /** Moi Dark always has its complete, predictable upper-right trio, independent of an older custom button order. */
+    /** Moi themes have their own top-button choices, separate from the original themes' configuration. */
     static List<Item> moiTopButtons() {
         List<Item> items = new ArrayList<>();
-        items.add(topButton(TOP_SETTINGS));
-        items.add(topButton(TOP_NOTIFICATIONS));
+        for (String key : moiTopButtonKeys()) items.add(topButton(key));
         return items;
+    }
+
+    static List<String> moiTopButtonKeys() {
+        List<String> saved = Prefs.moiTopButtons();
+        if (saved == null) return MOI_TOP_DEFAULT;
+        List<String> keys = new ArrayList<>();
+        for (String key : saved) if (MOI_TOP_DEFAULT.contains(key) && !keys.contains(key)) keys.add(key);
+        if (!keys.contains(TOP_SETTINGS)) keys.add(TOP_SETTINGS);
+        return keys;
     }
 
     private static Item topButton(String key) {
@@ -269,7 +279,8 @@ final class HomeApps {
     /** What can go in the top buttons, as {key, name}. */
     static List<String[]> topCandidates() {
         List<String[]> out = new ArrayList<>();
-        for (String key : TOP_DEFAULT) out.add(new String[] {key, topButton(key).label});
+        List<String> keys = Prefs.moiTheme() ? MOI_TOP_DEFAULT : TOP_DEFAULT;
+        for (String key : keys) out.add(new String[] {key, topButton(key).label});
         return out;
     }
 

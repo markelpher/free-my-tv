@@ -357,6 +357,14 @@ final class Shaders {
                 night ? 0x63304D : 0xE87558, night ? 0xA45165 : 0xFFC477);
         else if ("aurora".equals(style)) out.set(night ? 0x080F2B : 0x184D86,
                 night ? 0x254B83 : 0x37A3B7, night ? 0x7653A8 : 0x9CE7CA);
+        else if ("forest".equals(style)) out.set(night ? 0x071B19 : 0x216348,
+                night ? 0x16443A : 0x5FA779, night ? 0x347363 : 0xC3DDB5);
+        else if ("ember".equals(style)) out.set(night ? 0x25131A : 0x9A3C31,
+                night ? 0x69313B : 0xE27645, night ? 0xA45D54 : 0xFFD08A);
+        else if ("lavender".equals(style)) out.set(night ? 0x17162F : 0x56549A,
+                night ? 0x44376D : 0x928CC8, night ? 0x806EAA : 0xE6C4DC);
+        else if ("midnight".equals(style)) out.set(night ? 0x050B18 : 0x173D67,
+                night ? 0x102747 : 0x34749A, night ? 0x255477 : 0x9BC8D0);
     }
 
     private static int mix(int a, int b, float f) {

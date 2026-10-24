@@ -53,6 +53,10 @@ public class SettingsActivity extends Activity {
         if (openFireHome(getIntent())) return;
         Watchdog.install(this);
         Ui.init(this);
+        if (android.os.Build.VERSION.SDK_INT >= 33
+                && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[] {android.Manifest.permission.POST_NOTIFICATIONS}, 7313);
+        }
         SleepTimer.listen(this);   // :home may start here, from the launcher icon
         SleepTimer.check(this);
         view = new SettingsView(this);
@@ -85,6 +89,12 @@ public class SettingsActivity extends Activity {
         }
     }
 
+    @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
+        super.onRequestPermissionsResult(requestCode, permissions, results);
+        if (requestCode == 7313 && results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED
+                && Prefs.updateChecks()) Updates.check(this, null);
+    }
+
     @Override protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         if (openFireHome(intent)) return;
@@ -95,6 +105,11 @@ public class SettingsActivity extends Activity {
         closePreview();     // before pausing the view: closing the preview resumes it (view.resume)
         if (view != null) view.pause();
         super.onPause();
+    }
+
+    @Override protected void onDestroy() {
+        HomeView.releaseLivePreview(this);
+        super.onDestroy();
     }
 
     @Override public boolean dispatchKeyEvent(KeyEvent event) {
@@ -134,7 +149,8 @@ public class SettingsActivity extends Activity {
 
     static final class SettingsView extends View implements Choreographer.FrameCallback {
         private static final int MAIN = 0, HOME_CHOICE = 1, HOME_SETTINGS = 2, REMOTE_KEYS = 3, PICKER = 4, SHELF_EDIT = 5,
-                SCREENSAVER_CHOICE = 6, SETTING_PICKER = 7, SETTINGS_CATEGORIES = 8, SAVER_SETTINGS = 9, POWER = 10;
+                SCREENSAVER_CHOICE = 6, SETTING_PICKER = 7, SETTINGS_CATEGORIES = 8, SAVER_SETTINGS = 9, POWER = 10,
+                UPDATE_SETTINGS = 11, PERSONALIZATION = 12;
         private static final float LIST_ROW_H = 68, LIST_ROW_GAP = 6;
         private static final int PICK_VISIBLE = 9;
         private static final float LIST_X = 1000, LIST_R = 1824, LIST_TOP = 186, ROW_GAP = 8, CHOICE_H = 104;
@@ -183,7 +199,7 @@ public class SettingsActivity extends Activity {
         private long startedAt, lastNanos, pendingAt, lastSky;
         private int w, h;
         private float k = 1;
-        private Paint title, subtitle, version, rowLabel, rowValue, rowSub, header, cellLabel, cellValue, warn, spinner, white, shadow;
+        private Paint title, version, rowLabel, rowValue, rowSub, header, cellLabel, cellValue, warn, spinner, white, shadow;
         private TextPaint notice;
 
         private final Runnable poll = new Runnable() {
@@ -220,7 +236,7 @@ public class SettingsActivity extends Activity {
             scene.setMotion(0.5f, 0.2f);
             scene.applyPalette();
             setFocusable(true);
-            setContentDescription("TCL | Android TV");
+            setContentDescription(tvIdentity());
             // TalkBack: one item per row, id = row + 1.
             spoken = new Spoken(this, new Spoken.Source() {
                 @Override public void items(List<Integer> out) { for (int i = 1; i <= rowCount(); i++) out.add(i); }
@@ -258,14 +274,14 @@ public class SettingsActivity extends Activity {
                                 : freeActive() ? "Free My TV" : Ui.tr("Original");
                         return Ui.trf("Home Screen, {mode}", "mode", value);
                     }
-                    String[] names = {Ui.tr("Screensaver, preview"), Ui.tr("Home Settings"),
-                            Ui.tr("Shelf"), Ui.tr("Top Buttons"), Ui.tr("Remote Buttons"), Ui.tr("Sleep Timer"),
-                            Ui.tr("TV Settings")};
-                    names[1] = Ui.tr("Settings");
+                    String[] names = {Ui.tr("Screensaver, preview"), Ui.tr("Settings"),
+                            Ui.tr("Shelf"), Ui.tr("Remote Buttons"), Ui.tr("Sleep Timer"),
+                            Ui.tr("Updates"), Ui.tr("TV Settings")};
                     return row - 1 < names.length ? names[row - 1] : "";
                 }
                 case SETTINGS_CATEGORIES:
-                    return row == 0 ? Ui.tr("Home Settings") : Ui.tr("Screensaver Settings");
+                    return row == 0 ? Ui.tr("Personalization") : row == 1 ? Ui.tr("Home Settings")
+                            : Ui.tr("Screensaver Settings");
                 case HOME_CHOICE: {
                     String name = row == 0 ? "Free My TV, " + Ui.tr("no ads, with the new screensaver")
                             : "Original, " + Ui.tr("the TV's factory home screen");
@@ -280,6 +296,14 @@ public class SettingsActivity extends Activity {
                     String[] labels = listLabels(), values = listValues();
                     int at = keys ? row : pickScroll + row;
                     return at < labels.length ? labels[at] + ", " + values[at] : "";
+                }
+                case UPDATE_SETTINGS: {
+                    String[] labels = listLabels(), values = listValues();
+                    return row < labels.length ? labels[row] + ", " + values[row] : "";
+                }
+                case PERSONALIZATION: {
+                    String[] labels = listLabels(), values = listValues();
+                    return row < labels.length ? labels[row] + (values[row].isEmpty() ? "" : ", " + values[row]) : "";
                 }
                 case SETTING_PICKER: {
                     int at = pickScroll + row;
@@ -364,8 +388,6 @@ public class SettingsActivity extends Activity {
             Symbols.warm(getContext(), "check", 26 * k);
             title = Ui.text(Ui.displaySemibold, 50 * k, 0xFFFFFFFF);
             title.setTextAlign(Paint.Align.CENTER);
-            subtitle = Ui.text(Ui.regular, 26 * k, 0x99FFFFFF);
-            subtitle.setTextAlign(Paint.Align.CENTER);
             version = Ui.text(Ui.regular, 22 * k, 0x66FFFFFF);
             version.setTextAlign(Paint.Align.CENTER);
             rowLabel = Ui.text(Ui.medium, 30 * k, 0xF2FFFFFF);
@@ -408,13 +430,15 @@ public class SettingsActivity extends Activity {
                 case MAIN: return 8;
                 case HOME_CHOICE:
                 case SCREENSAVER_CHOICE:
-                case SETTINGS_CATEGORIES: return 2;
+                case SETTINGS_CATEGORIES: return 3;
                 case HOME_SETTINGS: return Math.min(SETTINGS_VISIBLE, settingLabels().length);
                 case SAVER_SETTINGS: return settingLabels().length;
                 case PICKER: return Math.min(PICK_VISIBLE, pickLabels.size());
                 case SETTING_PICKER: return Math.min(PICK_VISIBLE, settingChoiceLabels.length);
                 case SHELF_EDIT: return Math.min(PICK_VISIBLE, shelfRows.size());
                 case POWER: return powerRows().length;
+                case UPDATE_SETTINGS: return 2;
+                case PERSONALIZATION: return listLabels().length;
                 default: return Prefs.KEYS.length;
             }
         }
@@ -437,12 +461,10 @@ public class SettingsActivity extends Activity {
             if (Prefs.moiTheme()) c.drawColor(0xFF09090B);
             else scene.drawBackground(c);
 
-            // On the left: big symbol, title, description.
+            // On the left: automatically detected TV brand and installed platform.
             float cx = 500 * k;
-            Symbols.draw(getContext(), c, "android", cx, 400 * k, 150 * k, 0xEBFFFFFF);
-            c.drawText("TCL | Android TV", cx, 612 * k, title);
-            c.drawText(Ui.tr("Your TV's home screen and screensaver"), cx, 660 * k, subtitle);
-            c.drawText(versionName(getContext()), cx, 704 * k, version);
+            drawTvIdentity(c, cx);
+            c.drawText(versionName(getContext()), cx, 548 * k, version);
 
             if (screen == MAIN) drawMain(c, seconds); else if (screen == HOME_CHOICE) drawChoice(c);
             else if (screen == SCREENSAVER_CHOICE) drawScreensaverChoice(c); else if (screen == PICKER) drawPicker(c);
@@ -450,13 +472,59 @@ public class SettingsActivity extends Activity {
             else if (screen == SHELF_EDIT) drawShelfEditor(c); else if (screen == SETTING_PICKER) drawSettingPicker(c); else drawList(c);
         }
 
+        private String tvBrand() {
+            return TvIdentity.brand(android.os.Build.MANUFACTURER, android.os.Build.BRAND);
+        }
+
+        private boolean hasPackage(String name) {
+            try {
+                getContext().getPackageManager().getApplicationInfo(name, 0);
+                return true;
+            } catch (PackageManager.NameNotFoundException ignored) {
+                return false;
+            }
+        }
+
+        private String tvPlatform() {
+            return TvIdentity.platform(hasPackage("com.google.android.apps.tv.launcherx"));
+        }
+
+        private String tvIdentity() { return tvBrand() + " | " + tvPlatform(); }
+
+        private void drawTvIdentity(Canvas c, float centerX) {
+            String brand = tvBrand(), platform = tvPlatform();
+            TextPaint brandPaint = new TextPaint(title), systemPaint = new TextPaint(title), separator = new TextPaint(title);
+            brandPaint.setTextAlign(Paint.Align.LEFT);
+            brandPaint.setTextSize(50 * k);
+            brandPaint.setColor("TCL".equals(brand) ? 0xFFFF555B : 0xFFF4F6F9);
+            systemPaint.setTextAlign(Paint.Align.LEFT);
+            systemPaint.setTextSize(38 * k);
+            systemPaint.setColor(0xFFF4F6F9);
+            separator.setTextAlign(Paint.Align.LEFT);
+            separator.setTextSize(48 * k);
+            separator.setColor(0xFF77808B);
+            float iconSize = 62 * k;
+            float iconW = Symbols.width(getContext(), "android", iconSize);
+            float gap = 22 * k;
+            float total = brandPaint.measureText(brand) + gap + separator.measureText("|") + gap
+                    + iconW + 12 * k + systemPaint.measureText(platform);
+            float x = centerX - total / 2f, baseline = 458 * k;
+            c.drawText(brand, x, baseline, brandPaint);
+            x += brandPaint.measureText(brand) + gap;
+            c.drawText("|", x, baseline, separator);
+            x += separator.measureText("|") + gap + iconW / 2f;
+            Symbols.draw(getContext(), c, "android", x, 444 * k, iconSize, 0xFFA4C639);
+            x += iconW / 2f + 12 * k;
+            c.drawText(platform, x, baseline, systemPaint);
+        }
+
         private void drawMain(Canvas c, float seconds) {
             boolean working = busy();
             String busyText = busyText();
             String mode = freeActive() ? "Free My TV" : Ui.tr("Original");
             String[] labels = {Ui.tr("Home Screen"), Ui.tr("Screensaver"),
-                    Ui.tr("Settings"), Ui.tr("Shelf"), Ui.tr("Top Buttons"),
-                    Ui.tr("Remote Buttons"), Ui.tr("Sleep Timer"), Ui.tr("TV Settings")};
+                    Ui.tr("Settings"), Ui.tr("Shelf"), Ui.tr("Remote Buttons"),
+                    Ui.tr("Sleep Timer"), Ui.tr("Updates"), Ui.tr("TV Settings")};
             String[] values = {working ? "" : mode, Ui.tr("Preview"), "", "", "", "", "", ""};
             for (int i = 0; i < labels.length; i++) {
                 float y = (MAIN_TOP + i * (ROW_H + MAIN_GAP)) * k;
@@ -646,8 +714,9 @@ public class SettingsActivity extends Activity {
         private void drawSettingsCategories(Canvas c) {
             Paint heading = Ui.text(Ui.displaySemibold, 34 * k, 0xFFFFFFFF);
             c.drawText(Ui.tr("Settings"), LIST_X * k + 30 * k, (LIST_TOP - 24) * k, heading);
-            String[][] options = {{Ui.tr("Home Settings"), Ui.tr("Language, theme, weather and Home appearance")},
-                    {Ui.tr("Screensaver Settings"), Ui.tr("Photo slideshow, gradient and clock position")}};
+            String[][] options = {{Ui.tr("Personalization"), Ui.tr("Choose a theme, colors and top buttons")},
+                    {Ui.tr("Home Settings"), Ui.tr("Language, temperature, widgets and city")},
+                    {Ui.tr("Screensaver Settings"), Ui.tr("Photo slideshow and clock position")}};
             for (int i = 0; i < options.length; i++) {
                 float y = (LIST_TOP + 20 + i * (CHOICE_H + ROW_GAP)) * k;
                 rowRect.set(LIST_X * k, y, LIST_R * k, y + CHOICE_H * k);
@@ -659,7 +728,7 @@ public class SettingsActivity extends Activity {
             }
             Paint hint = Ui.text(Ui.regular, 23 * k, 0x8CFFFFFF);
             c.drawText(Ui.tr("OK picks, Back cancels."), LIST_X * k + 30 * k,
-                    (LIST_TOP + 20 + 2 * (CHOICE_H + ROW_GAP) + 40) * k, hint);
+                    (LIST_TOP + 20 + options.length * (CHOICE_H + ROW_GAP) + 20) * k, hint);
         }
 
         private static int blend(int a, int b, float f) {
@@ -712,6 +781,9 @@ public class SettingsActivity extends Activity {
                 case KeyEvent.KEYCODE_DPAD_RIGHT:
                     if (down && screen == SHELF_EDIT) {
                         moveShelfApp(e.getKeyCode() == KeyEvent.KEYCODE_DPAD_RIGHT ? 1 : -1);
+                    } else if (down && screen == UPDATE_SETTINGS && focus == 1) {
+                        Prefs.setUpdateChecks(!Prefs.updateChecks());
+                        if (Prefs.updateChecks()) Updates.automatic(getContext());
                     } else if (down && (screen == HOME_SETTINGS || screen == REMOTE_KEYS || screen == POWER)) {
                         adjust(e.getKeyCode() == KeyEvent.KEYCODE_DPAD_RIGHT ? 1 : -1);
                     }
@@ -752,16 +824,22 @@ public class SettingsActivity extends Activity {
                             } else if (screen == PICKER) {
                                 focus = pickFor - 1;
                                 screen = REMOTE_KEYS;
-                            } else if (screen == HOME_SETTINGS || screen == SAVER_SETTINGS) {
-                                focus = screen == HOME_SETTINGS ? 0 : 1;
+                            } else if (screen == HOME_SETTINGS || screen == SAVER_SETTINGS || screen == PERSONALIZATION) {
+                                focus = screen == PERSONALIZATION ? 0 : screen == HOME_SETTINGS ? 1 : 2;
                                 pickScroll = 0;
                                 screen = SETTINGS_CATEGORIES;
                             } else if (screen == SETTINGS_CATEGORIES) {
                                 focus = 2;
                                 screen = MAIN;
+                            } else if (screen == UPDATE_SETTINGS) {
+                                focus = 6;
+                                screen = MAIN;
+                            } else if (screen == SHELF_EDIT && editingTop) {
+                                focus = 4;
+                                screen = PERSONALIZATION;
                             } else {
-                                focus = screen == HOME_SETTINGS ? 2 : screen == SHELF_EDIT ? (editingTop ? 4 : 3)
-                                        : screen == REMOTE_KEYS ? 5 : screen == POWER ? 6 : 0;
+                                focus = screen == SHELF_EDIT ? 3
+                                        : screen == REMOTE_KEYS ? 4 : screen == POWER ? 5 : 0;
                                 screen = MAIN;
                             }
                         }
@@ -777,26 +855,29 @@ public class SettingsActivity extends Activity {
 
         // MARK: - Home Settings and Remote Buttons
 
-        private static final String[] UNITS = {"auto", "C", "F"}, THEMES = {"auto", "light", "dark", "moi-dark", "moi-light"};
+        private static final String[] UNITS = {"auto", "C", "F"};
+        private static final String[] CLASSIC_THEMES = {"auto", "light", "dark"};
+        private static final String[] MOI_THEMES = {"moi-dark", "moi-light"};
+        private static final String[] ORBIT_THEMES = {"orbit-dark", "orbit-light"};
+        private static final String[] GRADIENTS = {"classic", "aurora", "ocean", "sunset", "forest", "ember", "lavender", "midnight"};
         /** Row indices shared by Home Settings and the Home renderer. */
-        private static final int LANGUAGE_ROW = 0, TEMPERATURE_ROW = 1, THEME_ROW = 2, PHOTOS_ROW = 3,
-                SOUNDS_ROW = 4, WEATHER_ROW = 5, RECOMMENDATIONS_ROW = 6, COMPARISON_ROW = 7,
-                HOME_GRADIENT_ROW = 8, CITY_ROW = 9;
+        private static final int LANGUAGE_ROW = 0, TEMPERATURE_ROW = 1, PHOTOS_ROW = 2,
+                SOUNDS_ROW = 3, WEATHER_ROW = 4, RECOMMENDATIONS_ROW = 5, COMPARISON_ROW = 6, CITY_ROW = 7;
         /** Stable setting IDs keep the saver picker independent from Home Settings row positions. */
-        private static final int SAVER_IMAGES_ID = 100, SAVER_GRADIENT_ID = 101, SAVER_POSITION_ID = 102, TCL_STARTUP_ID = 103;
+        private static final int SAVER_IMAGES_ID = 100, SAVER_POSITION_ID = 101, TCL_STARTUP_ID = 103,
+                HOME_DESIGN_ID = 105, CLASSIC_GROUP_ID = 106,
+                MOI_GROUP_ID = 107, ORBIT_GROUP_ID = 108;
         private static final int SETTINGS_VISIBLE = 10;
 
         private String[] homeSettingLabels() {
             List<String> l = new ArrayList<>();
             l.add(Ui.tr("Language"));
             l.add(Ui.tr("Temperature"));
-            l.add(Ui.tr("Theme"));
             l.add(Ui.tr("My Photos"));
             l.add(Ui.tr("Navigation sounds"));
             l.add(Ui.tr("Weather widget"));
             l.add(Ui.tr("Recommendations"));
             l.add(Ui.tr("Comparison"));
-            l.add(Ui.tr("Home gradient"));
             l.add(Ui.tr("City"));
             if (StartupBrand.supports(android.os.Build.MANUFACTURER, android.os.Build.BRAND)) {
                 l.add(Ui.tr("TCL startup fallback"));
@@ -805,7 +886,7 @@ public class SettingsActivity extends Activity {
         }
 
         private String[] saverSettingLabels() {
-            return new String[] {Ui.tr("Photo slideshow"), Ui.tr("Screensaver gradient"), Ui.tr("Clock position")};
+            return new String[] {Ui.tr("Photo slideshow"), Ui.tr("Clock position")};
         }
 
         private String[] settingLabels() {
@@ -814,8 +895,7 @@ public class SettingsActivity extends Activity {
 
         private String[] settingValues() {
             if (screen == SAVER_SETTINGS) {
-                return new String[] {onOff(Prefs.saverImages()), gradientLabel(Prefs.gradient()),
-                        Prefs.saverClockLeft() ? Ui.tr("Left") : Ui.tr("Right")};
+                return new String[] {onOff(Prefs.saverImages()), Prefs.saverClockLeft() ? Ui.tr("Left") : Ui.tr("Right")};
             }
             String[] labels = homeSettingLabels();
             String[] v = new String[labels.length];
@@ -823,7 +903,6 @@ public class SettingsActivity extends Activity {
             v[LANGUAGE_ROW] = lang.equals("auto") ? Ui.tr("Automatic") : Ui.languageName(lang);
             String unit = Prefs.temperature();
             v[TEMPERATURE_ROW] = unit.equals("C") ? "°C" : unit.equals("F") ? "°F" : Ui.tr("unit|Automatic");
-            v[THEME_ROW] = themeLabel(Prefs.theme());
             int photos = Photos.files(getContext()).size();
             v[PHOTOS_ROW] = photos == 0 ? Ui.tr("photos|None")
                     : Prefs.photos() ? Ui.plural("plural|one:{n} photo|other:{n} photos", photos) : Ui.tr("Off");
@@ -831,7 +910,6 @@ public class SettingsActivity extends Activity {
             v[WEATHER_ROW] = onOff(Prefs.weather());
             v[RECOMMENDATIONS_ROW] = onOff(Prefs.recommendations());
             v[COMPARISON_ROW] = onOff(Prefs.comparison());
-            v[HOME_GRADIENT_ROW] = gradientLabel(Prefs.homeGradient());
             v[CITY_ROW] = !cityStatus.isEmpty() ? cityStatus : Prefs.city().isEmpty() ? "—" : Prefs.city();
             if (StartupBrand.supports(android.os.Build.MANUFACTURER, android.os.Build.BRAND) && v.length > CITY_ROW + 1)
                 v[v.length - 1] = onOff(Prefs.tclStartup());
@@ -854,7 +932,7 @@ public class SettingsActivity extends Activity {
         private String need(int i) {
             switch (screen) {
                 case MAIN:
-                    return i == 5 ? Capabilities.NEED_REMOTE_BUTTONS : i == 7 ? Capabilities.NEED_ADB : null;
+                    return i == 4 ? Capabilities.NEED_REMOTE_BUTTONS : i == 7 ? Capabilities.NEED_ADB : null;
                 case POWER: {
                     int id = powerRows()[i];
                     return id == P_WHERE ? Capabilities.NEED_OVERLAY : null;
@@ -988,11 +1066,16 @@ public class SettingsActivity extends Activity {
         }
 
         private String[] listLabels() {
-            return screen == REMOTE_KEYS ? keyLabels() : screen == POWER ? powerLabels() : settingLabels();
+            return screen == PERSONALIZATION ? new String[] {Ui.tr("Classic"), Ui.tr("Moi"), Ui.tr("Orbit"), Ui.tr("Home design"), Ui.tr("Top Buttons")}
+                    : screen == UPDATE_SETTINGS ? new String[] {Ui.tr("Check for updates"), Ui.tr("Automatic updates")}
+                    : screen == REMOTE_KEYS ? keyLabels() : screen == POWER ? powerLabels() : settingLabels();
         }
 
         private String[] listValues() {
-            return screen == REMOTE_KEYS ? keyValues() : screen == POWER ? powerValues() : settingValues();
+            return screen == PERSONALIZATION ? new String[] {groupValue(CLASSIC_GROUP_ID), groupValue(MOI_GROUP_ID),
+                    groupValue(ORBIT_GROUP_ID), homeDesignLabel(Prefs.homeDesign()), ""}
+                    : screen == UPDATE_SETTINGS ? new String[] {"", onOff(Prefs.updateChecks())}
+                    : screen == REMOTE_KEYS ? keyValues() : screen == POWER ? powerValues() : settingValues();
         }
 
         private static String onOff(boolean on) {
@@ -1001,12 +1084,44 @@ public class SettingsActivity extends Activity {
 
         private static String gradientLabel(String value) {
             return value.equals("ocean") ? Ui.tr("Ocean") : value.equals("sunset") ? Ui.tr("Sunset")
-                    : value.equals("aurora") ? Ui.tr("Aurora") : Ui.tr("Classic");
+                    : value.equals("aurora") ? Ui.tr("Aurora") : value.equals("forest") ? Ui.tr("Forest")
+                    : value.equals("ember") ? Ui.tr("Ember") : value.equals("lavender") ? Ui.tr("Lavender")
+                    : value.equals("midnight") ? Ui.tr("Midnight") : Ui.tr("Classic");
+        }
+
+        private static String themePreset(String theme, String gradient) { return theme + "|" + gradient; }
+
+        private static String themePresetLabel(String preset) {
+            String[] parts = preset.split("\\|", 2);
+            String gradient = parts.length > 1 ? parts[1] : "classic";
+            return themeLabel(parts[0]) + " · " + gradientLabel(gradient);
+        }
+
+        private static String groupValue(int group) {
+            String theme = Prefs.theme();
+            boolean belongs = group == CLASSIC_GROUP_ID ? !theme.startsWith("moi-") && !theme.startsWith("orbit-")
+                    : group == MOI_GROUP_ID ? theme.startsWith("moi-") : theme.startsWith("orbit-");
+            return belongs ? gradientLabel(Prefs.homeGradient()) : Ui.tr("Choose");
+        }
+
+        private static String homeDesignLabel(String value) {
+            return value.equals("apps") ? Ui.tr("App Showcase")
+                    : value.equals("weather") ? Ui.tr("Weather Focus") : Ui.tr("Moi Dashboard");
+        }
+
+        private static String[] themePresets(int group) {
+            String[] themes = group == CLASSIC_GROUP_ID ? CLASSIC_THEMES : group == MOI_GROUP_ID ? MOI_THEMES : ORBIT_THEMES;
+            String[] presets = new String[themes.length * GRADIENTS.length];
+            int at = 0;
+            for (String theme : themes) for (String gradient : GRADIENTS)
+                presets[at++] = themePreset(theme, gradient);
+            return presets;
         }
 
         private static String themeLabel(String value) {
             return value.equals("light") ? Ui.tr("Light") : value.equals("dark") ? Ui.tr("Dark")
-                    : value.equals("moi-dark") ? "Moi Dark" : value.equals("moi-light") ? "Moi Light" : Ui.tr("Automatic");
+                    : value.equals("moi-dark") ? "Moi Dark" : value.equals("moi-light") ? "Moi Light"
+                    : value.equals("orbit-dark") ? "Orbit Dark" : value.equals("orbit-light") ? "Orbit Light" : Ui.tr("Automatic");
         }
 
         private String[] keyLabels() {
@@ -1081,17 +1196,12 @@ public class SettingsActivity extends Activity {
             int row = pickScroll + focus;
             if (screen == SAVER_SETTINGS) {
                 if (row == 0) Prefs.setSaverImages(!Prefs.saverImages());
-                else if (row == 1) Prefs.setGradient(cycle(Prefs.gradient(), new String[] {"classic", "aurora", "ocean", "sunset"}, dir));
                 else Prefs.setSaverClockLeft(!Prefs.saverClockLeft());
                 return;
             }
             switch (row) {
                 case LANGUAGE_ROW: return;
                 case TEMPERATURE_ROW: Prefs.setTemperature(cycle(Prefs.temperature(), UNITS, dir)); break;
-                case THEME_ROW:
-                    Prefs.setTheme(cycle(Prefs.theme(), THEMES, dir));
-                    SleepOverlay.update(getContext());
-                    break;
                 case PHOTOS_ROW:
                     if (Photos.files(getContext()).isEmpty()) return;
                     Prefs.setPhotos(!Prefs.photos()); break;
@@ -1099,7 +1209,6 @@ public class SettingsActivity extends Activity {
                 case WEATHER_ROW: Prefs.setWeather(!Prefs.weather()); break;
                 case RECOMMENDATIONS_ROW: Prefs.setRecommendations(!Prefs.recommendations()); break;
                 case COMPARISON_ROW: Prefs.setComparison(!Prefs.comparison()); break;
-                case HOME_GRADIENT_ROW: Prefs.setHomeGradient(cycle(Prefs.homeGradient(), new String[] {"classic", "aurora", "ocean", "sunset"}, dir)); break;
                 case CITY_ROW: return;
                 default:
                     if (row == tclStartupRow()) Prefs.setTclStartup(!Prefs.tclStartup());
@@ -1121,7 +1230,7 @@ public class SettingsActivity extends Activity {
 
         private int settingId(int row) {
             if (screen == SAVER_SETTINGS)
-                return row == 0 ? SAVER_IMAGES_ID : row == 1 ? SAVER_GRADIENT_ID : SAVER_POSITION_ID;
+                return row == 0 ? SAVER_IMAGES_ID : SAVER_POSITION_ID;
             return row == tclStartupRow() ? TCL_STARTUP_ID : row;
         }
 
@@ -1134,11 +1243,11 @@ public class SettingsActivity extends Activity {
             switch (id) {
                 case LANGUAGE_ROW: values = languageChoices(); break;
                 case TEMPERATURE_ROW: values = UNITS.clone(); break;
-                case THEME_ROW: values = THEMES.clone(); break;
+                case CLASSIC_GROUP_ID: case MOI_GROUP_ID: case ORBIT_GROUP_ID: values = themePresets(id); break;
+                case HOME_DESIGN_ID: values = new String[] {"dashboard", "apps", "weather"}; break;
                 case PHOTOS_ROW: values = Photos.files(getContext()).isEmpty() ? new String[] {"on", "off"} : new String[] {"on", "off", "remove"}; break;
                 case SOUNDS_ROW: case WEATHER_ROW: case RECOMMENDATIONS_ROW: case COMPARISON_ROW:
                 case SAVER_IMAGES_ID: case TCL_STARTUP_ID: values = new String[] {"on", "off"}; break;
-                case HOME_GRADIENT_ROW: case SAVER_GRADIENT_ID: values = new String[] {"classic", "aurora", "ocean", "sunset"}; break;
                 case SAVER_POSITION_ID: values = new String[] {"right", "left"}; break;
                 default: return;
             }
@@ -1155,15 +1264,15 @@ public class SettingsActivity extends Activity {
             switch (id) {
                 case LANGUAGE_ROW: return Prefs.language();
                 case TEMPERATURE_ROW: return Prefs.temperature();
-                case THEME_ROW: return Prefs.theme();
+                case CLASSIC_GROUP_ID: case MOI_GROUP_ID: case ORBIT_GROUP_ID:
+                    return themePreset(Prefs.theme(), Prefs.homeGradient());
+                case HOME_DESIGN_ID: return Prefs.homeDesign();
                 case PHOTOS_ROW: return Prefs.photos() ? "on" : "off";
                 case SOUNDS_ROW: return Prefs.sounds() ? "on" : "off";
                 case WEATHER_ROW: return Prefs.weather() ? "on" : "off";
                 case RECOMMENDATIONS_ROW: return Prefs.recommendations() ? "on" : "off";
                 case COMPARISON_ROW: return Prefs.comparison() ? "on" : "off";
-                case HOME_GRADIENT_ROW: return Prefs.homeGradient();
                 case SAVER_IMAGES_ID: return Prefs.saverImages() ? "on" : "off";
-                case SAVER_GRADIENT_ID: return Prefs.gradient();
                 case SAVER_POSITION_ID: return Prefs.saverClockLeft() ? "left" : "right";
                 case TCL_STARTUP_ID: return Prefs.tclStartup() ? "on" : "off";
                 default: return "";
@@ -1174,8 +1283,8 @@ public class SettingsActivity extends Activity {
             if (value.equals("remove")) return Ui.tr("Remove");
             if (id == LANGUAGE_ROW) return value.equals("auto") ? Ui.tr("Automatic") : Ui.languageName(value);
             if (id == TEMPERATURE_ROW) return value.equals("C") ? "?C" : value.equals("F") ? "?F" : Ui.tr("unit|Automatic");
-            if (id == THEME_ROW) return themeLabel(value);
-            if (id == HOME_GRADIENT_ROW || id == SAVER_GRADIENT_ID) return gradientLabel(value);
+            if (id == CLASSIC_GROUP_ID || id == MOI_GROUP_ID || id == ORBIT_GROUP_ID) return themePresetLabel(value);
+            if (id == HOME_DESIGN_ID) return homeDesignLabel(value);
             if (id == SAVER_POSITION_ID) return value.equals("left") ? Ui.tr("Left") : Ui.tr("Right");
             return value.equals("on") ? Ui.tr("On") : Ui.tr("Off");
         }
@@ -1190,15 +1299,22 @@ public class SettingsActivity extends Activity {
             switch (id) {
                 case LANGUAGE_ROW: Prefs.setLanguage(value); break;
                 case TEMPERATURE_ROW: Prefs.setTemperature(value); break;
-                case THEME_ROW: Prefs.setTheme(value); SleepOverlay.update(getContext()); break;
+                case CLASSIC_GROUP_ID: case MOI_GROUP_ID: case ORBIT_GROUP_ID: {
+                    String[] parts = value.split("\\|", 2);
+                    if (parts.length != 2) return;
+                    Prefs.setTheme(parts[0]);
+                    Prefs.setHomeGradient(parts[1]);
+                    Prefs.setGradient(parts[1]);
+                    SleepOverlay.update(getContext());
+                    break;
+                }
+                case HOME_DESIGN_ID: Prefs.setHomeDesign(value); break;
                 case PHOTOS_ROW: Prefs.setPhotos(value.equals("on")); break;
                 case SOUNDS_ROW: Prefs.setSounds(value.equals("on")); break;
                 case WEATHER_ROW: Prefs.setWeather(value.equals("on")); break;
                 case RECOMMENDATIONS_ROW: Prefs.setRecommendations(value.equals("on")); break;
                 case COMPARISON_ROW: Prefs.setComparison(value.equals("on")); break;
-                case HOME_GRADIENT_ROW: Prefs.setHomeGradient(value); break;
                 case SAVER_IMAGES_ID: Prefs.setSaverImages(value.equals("on")); break;
-                case SAVER_GRADIENT_ID: Prefs.setGradient(value); break;
                 case SAVER_POSITION_ID: Prefs.setSaverClockLeft(value.equals("left")); break;
                 case TCL_STARTUP_ID: Prefs.setTclStartup(value.equals("on")); break;
                 default: return;
@@ -1294,7 +1410,7 @@ public class SettingsActivity extends Activity {
             editingTop = top;
             shelfOrder.clear();
             if (top) {
-                shelfOrder.addAll(HomeApps.topButtonKeys());
+                shelfOrder.addAll(Prefs.moiTheme() ? HomeApps.moiTopButtonKeys() : HomeApps.topButtonKeys());
                 rebuildShelfRows(HomeApps.topCandidates());
             } else {
                 // Only the apps the shelf shows: one that was uninstalled would hold a place (and count toward the
@@ -1329,13 +1445,17 @@ public class SettingsActivity extends Activity {
                 focus = i - pickScroll;
                 break;
             }
-            if (editingTop) Prefs.setTopButtons(shelfOrder); else Prefs.setShelf(shelfOrder);
+            if (editingTop) {
+                if (Prefs.moiTheme()) Prefs.setMoiTopButtons(shelfOrder);
+                else Prefs.setTopButtons(shelfOrder);
+            } else Prefs.setShelf(shelfOrder);
             HomeView.refreshLivePreview();
         }
 
         /** OK: puts the app on the shelf (at the end) or takes it off. */
         private void toggleShelfApp() {
             String pkg = shelfRows.get(pickScroll + focus)[0];
+            if (editingTop && HomeApps.TOP_SETTINGS.equals(pkg)) return;
             if (shelfOrder.contains(pkg)) shelfOrder.remove(pkg);
             else if (editingTop || shelfOrder.size() < HomeApps.maxShelf(getContext())) shelfOrder.add(pkg);   // three buttons: no limit to reach
             else return;
@@ -1393,7 +1513,7 @@ public class SettingsActivity extends Activity {
         private void drawHomeEditorPreview(Canvas c) {
             float left = 104 * k, top = 250 * k, width = 800 * k, height = 450 * k;
             RectF box = new RectF(left, top, left + width, top + height);
-            if (!HomeView.drawLivePreview(c, box)) {
+            if (!HomeView.drawLivePreview(activity, c, box)) {
                 Paint empty = new Paint(Paint.ANTI_ALIAS_FLAG);
                 empty.setColor(0xFF111113);
                 c.drawRoundRect(box, 24 * k, 24 * k, empty);
@@ -1501,7 +1621,12 @@ public class SettingsActivity extends Activity {
             float left = 104 * k, top = 232 * k, width = 800 * k, height = 450 * k;
             RectF box = new RectF(left, top, left + width, top + height);
             String previewKey = previewKey(settingFor);
-            if (previewKey != null) Prefs.preview(previewKey, value);
+            if (settingFor == CLASSIC_GROUP_ID || settingFor == MOI_GROUP_ID || settingFor == ORBIT_GROUP_ID) {
+                String[] parts = value.split("\\|", 2);
+                if (parts.length == 2) Prefs.previewThemePreset(parts[0], parts[1]);
+            } else if (settingFor == HOME_DESIGN_ID) {
+                Prefs.previewHomeDesign(value);
+            } else if (previewKey != null) Prefs.preview(previewKey, value);
             boolean saver = settingsReturnScreen == SAVER_SETTINGS;
             String choice = settingFor + ":" + value;
             if (saver && saverLivePreview != null && !choice.equals(saverPreviewChoice)) {
@@ -1510,7 +1635,7 @@ public class SettingsActivity extends Activity {
                 } else saverLivePreview.previewSettingsChanged();
             }
             saverPreviewChoice = choice;
-            boolean drawn = saver ? drawScreensaverLivePreview(c, box) : HomeView.drawLivePreview(c, box);
+            boolean drawn = saver ? drawScreensaverLivePreview(c, box) : HomeView.drawLivePreview(activity, c, box);
             Prefs.clearPreview();
             if (!drawn) {
                 Paint blank = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -1530,9 +1655,6 @@ public class SettingsActivity extends Activity {
 
         private String previewKey(int id) {
             switch (id) {
-                case THEME_ROW: return "theme";
-                case HOME_GRADIENT_ROW: return "homeGradient";
-                case SAVER_GRADIENT_ID: return "gradient";
                 case SAVER_IMAGES_ID: return "saverImages";
                 case SAVER_POSITION_ID: return "saverClockLeft";
                 case PHOTOS_ROW: return "photos";
@@ -1568,6 +1690,7 @@ public class SettingsActivity extends Activity {
             String[] values = listValues();
             Paint heading = Ui.text(Ui.displaySemibold, 34 * k, 0xFFFFFFFF);
             c.drawText(keys ? Ui.tr("Remote Buttons") : screen == POWER ? Ui.tr("Sleep Timer")
+                    : screen == UPDATE_SETTINGS ? Ui.tr("Updates") : screen == PERSONALIZATION ? Ui.tr("Personalization")
                     : Ui.tr(screen == SAVER_SETTINGS ? "Screensaver Settings" : "Home Settings"),
                     LIST_X * k + 30 * k, (LIST_TOP - 24) * k, heading);
             float pitch = LIST_ROW_H + LIST_ROW_GAP;
@@ -1594,6 +1717,7 @@ public class SettingsActivity extends Activity {
                     ? Ui.tr("Send them from a computer: see “Your own photos” in the README.")
                     : Ui.tr("OK removes them; the arrows turn them on or off."))
                     : screen == POWER && powerRow() != P_SHOW && unavailable(focus) == null ? Ui.tr("OK opens the list. ← → change the value.")
+                    : screen == UPDATE_SETTINGS ? Ui.tr("OK opens the update check; arrows turn automatic updates on or off.")
                     : screen == SETTING_PICKER ? Ui.tr("Focus an option to preview it; OK selects; Back cancels.")
                     : Ui.tr("OK opens the choices.")), LIST_X * k + 30 * k, hy, hint);
             if (keys) {
@@ -1665,8 +1789,39 @@ public class SettingsActivity extends Activity {
                 return;
             } else if (screen == POWER) {
                 activatePower();
+            } else if (screen == PERSONALIZATION && focus <= 2) {
+                openSettingPicker(focus == 0 ? CLASSIC_GROUP_ID : focus == 1 ? MOI_GROUP_ID : ORBIT_GROUP_ID);
+                invalidate();
+                return;
+            } else if (screen == PERSONALIZATION && focus == 3) {
+                openSettingPicker(HOME_DESIGN_ID);
+                invalidate();
+                return;
+            } else if (screen == PERSONALIZATION && focus == 4) {
+                openShelfEditor(true);
+            } else if (screen == UPDATE_SETTINGS && focus == 0) {
+                Toast.makeText(c, Ui.tr("Checking for updates…"), Toast.LENGTH_SHORT).show();
+                Updates.check(c, (release, error) -> {
+                    if (activity.isFinishing() || (android.os.Build.VERSION.SDK_INT >= 17 && activity.isDestroyed())) return;
+                    if (release == null) {
+                        String text = error == null ? Ui.tr("You're up to date.")
+                                : Ui.trf("Couldn't check for updates: {error}", "error", error);
+                        new AlertDialog.Builder(activity, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                                .setTitle(Ui.tr("Free My TV updates")).setMessage(text)
+                                .setPositiveButton(Ui.tr("OK"), null).show();
+                    } else {
+                        new AlertDialog.Builder(activity, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                                .setTitle(Ui.tr("Update available"))
+                                .setMessage(Ui.trf("Free My TV {version} is available. Download it now?", "version", release.version))
+                                .setNegativeButton(Ui.tr("Not now"), null)
+                                .setPositiveButton(Ui.tr("Download"), (dialog, which) -> Updates.download(activity, release)).show();
+                    }
+                });
+            } else if (screen == UPDATE_SETTINGS) {
+                Prefs.setUpdateChecks(!Prefs.updateChecks());
+                if (Prefs.updateChecks()) Updates.automatic(c);
             } else if (screen == SETTINGS_CATEGORIES) {
-                screen = focus == 0 ? HOME_SETTINGS : SAVER_SETTINGS;
+                screen = focus == 0 ? PERSONALIZATION : focus == 1 ? HOME_SETTINGS : SAVER_SETTINGS;
                 focus = 0;
                 pickScroll = 0;
             } else if (screen == HOME_SETTINGS || screen == SAVER_SETTINGS) {
@@ -1692,15 +1847,16 @@ public class SettingsActivity extends Activity {
             } else if (focus == 3) {
                 openShelfEditor(false);
             } else if (focus == 4) {
-                openShelfEditor(true);
-            } else if (focus == 5) {
                 HomeMode.ensureRemoteService(c, 0);   // the buttons work from inside other apps through this service
                 loadApps();
                 screen = REMOTE_KEYS;
                 focus = 0;
-            } else if (focus == 6) {
+            } else if (focus == 5) {
                 pickScroll = 0;
                 screen = POWER;
+                focus = 0;
+            } else if (focus == 6) {
+                screen = UPDATE_SETTINGS;
                 focus = 0;
             } else {
                 activity.startActivity(new Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));

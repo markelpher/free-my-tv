@@ -115,33 +115,27 @@ final class Symbols {
         canvas.drawBitmap(s, null, RECT, PAINT);
     }
 
-    /** Small Android robot mark, drawn directly so it needs no extra bitmap or font glyph. */
+    /** Android's head-only TV mark, drawn directly so it needs no bitmap or font glyph. */
     private static void drawAndroid(Canvas canvas, float cx, float cy, float pointSize, int color) {
         float u = pointSize / 40f;
         PAINT.setColor(color);
         PAINT.setStyle(Paint.Style.STROKE);
         PAINT.setStrokeCap(Paint.Cap.ROUND);
-        PAINT.setStrokeWidth(1.7f * u);
-        canvas.drawLine(cx - 6 * u, cy - 10 * u, cx - 10 * u, cy - 16 * u, PAINT);
-        canvas.drawLine(cx + 6 * u, cy - 10 * u, cx + 10 * u, cy - 16 * u, PAINT);
+        PAINT.setStrokeWidth(1.8f * u);
+        canvas.drawLine(cx - 6 * u, cy - 4 * u, cx - 10 * u, cy - 11 * u, PAINT);
+        canvas.drawLine(cx + 6 * u, cy - 4 * u, cx + 10 * u, cy - 11 * u, PAINT);
 
         PAINT.setStyle(Paint.Style.FILL);
         Path head = ANDROID_HEAD;
         head.reset();
         head.setFillType(Path.FillType.EVEN_ODD);
-        head.moveTo(cx - 15 * u, cy - 1 * u);
-        head.cubicTo(cx - 15 * u, cy - 9 * u, cx - 8 * u, cy - 14 * u, cx, cy - 14 * u);
-        head.cubicTo(cx + 8 * u, cy - 14 * u, cx + 15 * u, cy - 9 * u, cx + 15 * u, cy - 1 * u);
+        head.moveTo(cx - 15 * u, cy + 7 * u);
+        head.cubicTo(cx - 15 * u, cy - 1 * u, cx - 8 * u, cy - 6 * u, cx, cy - 6 * u);
+        head.cubicTo(cx + 8 * u, cy - 6 * u, cx + 15 * u, cy - 1 * u, cx + 15 * u, cy + 7 * u);
         head.close();
-        head.addCircle(cx - 6 * u, cy - 7 * u, 1.25f * u, Path.Direction.CW);
-        head.addCircle(cx + 6 * u, cy - 7 * u, 1.25f * u, Path.Direction.CW);
+        head.addCircle(cx - 6 * u, cy + 1 * u, 1.25f * u, Path.Direction.CW);
+        head.addCircle(cx + 6 * u, cy + 1 * u, 1.25f * u, Path.Direction.CW);
         canvas.drawPath(head, PAINT);
-
-        canvas.drawRoundRect(cx - 15 * u, cy, cx + 15 * u, cy + 14 * u, 2.5f * u, 2.5f * u, PAINT);
-        canvas.drawRoundRect(cx - 21 * u, cy + 1 * u, cx - 17 * u, cy + 12 * u, 2 * u, 2 * u, PAINT);
-        canvas.drawRoundRect(cx + 17 * u, cy + 1 * u, cx + 21 * u, cy + 12 * u, 2 * u, 2 * u, PAINT);
-        canvas.drawRoundRect(cx - 10 * u, cy + 12 * u, cx - 5 * u, cy + 22 * u, 2.4f * u, 2.4f * u, PAINT);
-        canvas.drawRoundRect(cx + 5 * u, cy + 12 * u, cx + 10 * u, cy + 22 * u, 2.4f * u, 2.4f * u, PAINT);
     }
 
     /** Every symbol weather() returns, warmed at `pointSize` (the card shows whichever the forecast brings). */

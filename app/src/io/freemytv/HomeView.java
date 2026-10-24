@@ -63,6 +63,8 @@ import java.util.function.Consumer;
  */
 final class HomeView extends ViewGroup implements Choreographer.FrameCallback, HomeData.Listener, Recs.Listener {
     private static WeakReference<HomeView> preview = new WeakReference<>(null);
+    private static HomeView previewFallback;
+    private String previewLayoutKey = "";
     // tvOS grid (Human Interface Guidelines): content inside the safe area, 80 px from the sides and 60 from top and
     // bottom; 40 px between items; 7 columns of 217 px (the apps). The shelf glass extends 36 px past the tiles (the
     // same padding on all four sides) and the tile corners are concentric with it (glass radius = radius + padding).
@@ -159,6 +161,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private Paint lTitle, lTab, lTabOn, lCardTitle, lCardMeta, lQuote, lTip, lDate, lClock, lWeather, lClockQuote;
     private Paint moiTime, moiDate, moiSection;
     private Shader lightGradient;
+    private Shader selectedHomeGradient;
+    private String selectedHomeGradientKey = "";
 
     // Shelf
     private List<HomeApps.Item> shelf = new ArrayList<>();
@@ -479,9 +483,20 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     }
 
     /** Draws the actual, paused home screen into a settings preview; no mock or separate home instance. */
-    static boolean drawLivePreview(Canvas canvas, RectF bounds) {
+    static boolean drawLivePreview(Activity owner, Canvas canvas, RectF bounds) {
         HomeView home = preview.get();
-        if (home == null || home.getWidth() <= 0 || home.getHeight() <= 0) return false;
+        if (home == null && previewFallback != null) home = previewFallback;
+        if (home == null) {
+            previewFallback = new HomeView(owner);
+            home = previewFallback;
+        }
+        if (home.getWidth() <= 0 || home.getHeight() <= 0) {
+            int width = 1920, height = 1080;
+            home.measure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY),
+                    MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY));
+            home.layout(0, 0, width, height);
+        }
+        home.syncLivePreviewLayout();
         home.updatePalette();
         home.invalidateAll();
         int save = canvas.save();
@@ -493,12 +508,33 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         return true;
     }
 
+    static void releaseLivePreview(Activity owner) {
+        HomeView home = previewFallback;
+        if (home == null || home.activity != owner) return;
+        home.destroy();
+        previewFallback = null;
+    }
+
+    /** A preview changes theme/layout without recreating the live HomeActivity; keep child layers in sync. */
+    private void syncLivePreviewLayout() {
+        String key = Prefs.theme() + "|" + Prefs.homeDesign() + "|" + getWidth() + "x" + getHeight();
+        if (key.equals(previewLayoutKey)) return;
+        int width = getWidth(), height = getHeight();
+        measure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY),
+                MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY));
+        layout(getLeft(), getTop(), getLeft() + width, getTop() + height);
+        setLightButtons(HomeApps.topButtons());
+        layoutShelf();
+        previewLayoutKey = key;
+    }
+
     /** Settings has changed the ordered shelf/buttons; refresh this paused view before drawing it into the preview. */
     static void refreshLivePreview() {
         HomeView home = preview.get();
         if (home == null) return;
         home.appsStale = true;
         home.reload();
+        home.layoutShelf();
         home.invalidateAll();
     }
 
@@ -1223,17 +1259,18 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private void layoutShelf() {
         int n = shelf.size();
         if (moi()) {
-            float panelW = (MOI_R - MOI_APPS_L) * k;
+            float panelW = (moiAppsRight() - moiAppsLeft()) * k;
             // A compact five-by-four grid leaves a permanent, visible rail for Inputs below it.  Card positions stay
             // fixed as apps are added, while the 16:9 size remains comfortable from a sofa even on a 55-inch screen.
             // A deliberately generous horizontal rhythm and a dedicated text lane make this a grid, not a cramped
             // collection of app banners.  The 125 px row pitch includes both the 16:9 art and its focused label.
-            float gap = 36 * k, tw = 172 * k;
-            float gridW = MOI_COLUMNS * tw + (MOI_COLUMNS - 1) * gap;
-            float x = MOI_APPS_L * k + (panelW - gridW) / 2f, y = MOI_APPS_TOP * k;
+            float gap = moiGap() * k, tw = moiTileWidth() * k;
+            float columns = moiColumns();
+            float gridW = columns * tw + (columns - 1) * gap;
+            float x = moiAppsLeft() * k + (panelW - gridW) / 2f, y = MOI_APPS_TOP * k;
             float th = tw * 9f / 16f;
             for (int i = 0; i < n; i++) {
-                int col = i % MOI_COLUMNS, row = i / MOI_COLUMNS;
+                int col = i % moiColumns(), row = i / moiColumns();
                 // This is a real grid, not a shelf: every cell has a stable address.  A short last row begins in
                 // column one, so apps never recenter or appear to drift when an app is added or removed.
                 // Each row owns a label lane. The focused name never lands on the next row of apps.
@@ -3170,14 +3207,14 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     }
 
     private boolean moiLight() {
-        return "moi-light".equals(Prefs.theme());
+        return "moi-light".equals(Prefs.theme()) || "orbit-light".equals(Prefs.theme());
     }
 
     // Moi's semantic palette.  Keeping roles here prevents an accidental "invert everything" light theme and makes
     // focus, copy and glass edge colors stay coherent when the system changes between the two named themes.
     private int moiPrimary() { return moiLight() ? 0xFF17243A : 0xFFF4F8FF; }
-    private int moiSecondary() { return moiLight() ? 0xFF4A5E78 : 0xFFDCE7F7; }
-    private int moiMuted() { return moiLight() ? 0xFF687B93 : 0xFFB8C7DA; }
+    private int moiSecondary() { return moiLight() ? 0xFF33445B : 0xFFDCE7F7; }
+    private int moiMuted() { return moiLight() ? 0xFF46566B : 0xFFB8C7DA; }
     private int moiFocus() { return moiLight() ? 0xFF245F9F : 0xFFF4F8FF; }
     private int moiGlassEdge() { return moiLight() ? 0x2C18314F : 0x26FFFFFF; }
 
@@ -3253,10 +3290,42 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         boolean fading = bgFadeAt != 0;
         // Drawer open: the background lightens (by day) or darkens (at night), as a filter on the drawing itself.
         android.graphics.ColorFilter v = veil(tone(0.32f, 0.42f) * Ui.clamp(drawer.value), blend(0xFFFFFFFF, 0xFF000000, night));
+        String style = Prefs.homeGradient();
+        if (moi() || !"classic".equals(style)) {
+            boolean dark = moi() ? !moiLight() : !DashboardTheme.isLight(Prefs.theme(), night >= 0.5f);
+            String key = style + (dark ? "-dark" : "-light") + (moi() ? "-dashboard" : "-classic");
+            if (!key.equals(selectedHomeGradientKey)) {
+                int[] colors;
+                if (moi() && "classic".equals(style)) {
+                    colors = dark ? new int[] {0xFF101114, 0xFF191B20, 0xFF111317}
+                            : new int[] {0xFFE2EAF3, 0xFFF5F8FC, 0xFFDCE6F1};
+                } else {
+                    Shaders.gradient(scene.palette, style, dark);
+                    colors = new int[] {scene.palette.color(0), scene.palette.color(1), scene.palette.color(2)};
+                }
+                selectedHomeGradient = new LinearGradient(0, 0, 0, Math.max(1, h), colors, null, Shader.TileMode.CLAMP);
+                selectedHomeGradientKey = key;
+            }
+            fill.setColorFilter(v);
+            fill.setColor(0xFFFFFFFF);
+            fill.setShader(selectedHomeGradient);
+            c.drawRect(screen, fill);
+            fill.setShader(null);
+            fill.setColorFilter(null);
+            imagePaint.setColorFilter(v);
+            // Keep personal/recommendation artwork as ambience without letting it wash out the chosen palette or text.
+            if (fading && bgFrom != null) drawLightImage(c, bgFrom, 0.38f * (bgTo == null ? 1 - e : 1));
+            if (bgTo != null) drawLightImage(c, bgTo, 0.38f * (fading ? e : 1));
+            imagePaint.setColorFilter(null);
+            fill.setShader(null);
+            fill.setColor(dark ? 0x35000000 : 0x66FFFFFF);
+            c.drawRect(screen, fill);
+            return;
+        }
         if (bgTo == null || (fading && bgFrom == null)) {
+            fill.setColorFilter(v);
             if (lightGradient == null) lightGradient = Ui.gradient(h, 0xFFF5F5F7, 0xFFE2E2E7);
             if (nightGradient == null) nightGradient = Ui.gradient(h, 0xFF1C1C1E, 0xFF0B0B0D);
-            fill.setColorFilter(v);
             fill.setColor(0xFF000000);
             if (night < 0.999f) {
                 fill.setShader(lightGradient);
@@ -3331,19 +3400,68 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         moiDate.setColor(moiSecondary());
         moiTime.setColor(moiPrimary());
         moiSection.setColor(moiPrimary());
+        if (orbit()) {
+            drawOrbitDashboard(c);
+            return;
+        }
         float x = MOI_LEFT * k;
         String date = dateText.toUpperCase(Ui.locale());
         // One visual baseline: this is a proper top bar, not two unrelated pieces of text.
         c.drawText(clockText, x, 106 * k, moiTime);
         c.drawText(date, x + moiTime.measureText(clockText) + 26 * k, 106 * k, moiDate);
-
-        RectF weather = new RectF(MOI_LEFT * k, MOI_TOP * k, MOI_WIDGET_R * k, MOI_BOTTOM * k);
-        RectF apps = new RectF(MOI_APPS_L * k, MOI_TOP * k, MOI_R * k, MOI_APPS_BOTTOM * k);
+        RectF weather = new RectF(MOI_LEFT * k, MOI_TOP * k, moiWidgetRight() * k, MOI_BOTTOM * k);
+        RectF apps = new RectF(moiAppsLeft() * k, MOI_TOP * k, moiAppsRight() * k, MOI_APPS_BOTTOM * k);
         drawMoiSurface(c, weather);
         drawMoiSurface(c, apps);
         drawMoiWeather(c, weather);
         c.drawText(Ui.tr("Apps"), apps.left + 30 * k, apps.top + 52 * k, moiSection);
         drawMoiInputs(c);
+    }
+
+    private static int moiColumns() { return "weather".equals(Prefs.homeDesign()) ? 4 : "apps".equals(Prefs.homeDesign()) ? 6 : MOI_COLUMNS; }
+    private boolean orbit() { return Prefs.theme().startsWith("orbit-"); }
+    private static float moiWidgetRight() { return "weather".equals(Prefs.homeDesign()) ? 790 : "apps".equals(Prefs.homeDesign()) ? 500 : MOI_WIDGET_R; }
+    private static float moiAppsLeft() { return Prefs.theme().startsWith("orbit-") ? 550 : moiWidgetRight() + 40; }
+    private static float moiAppsRight() { return MOI_R; }
+    private static float moiWidgetLeft() { return MOI_LEFT; }
+    private static float moiWeatherRight() { return Prefs.theme().startsWith("orbit-") ? 510 : moiWidgetRight(); }
+    private static float moiGap() { return "weather".equals(Prefs.homeDesign()) ? 26 : "apps".equals(Prefs.homeDesign()) ? 24 : 36; }
+    private static float moiTileWidth() { return "weather".equals(Prefs.homeDesign()) ? 210 : "apps".equals(Prefs.homeDesign()) ? 158 : 172; }
+
+    /** A new asymmetric, editorial layout: app collection on the left, full-height weather rail on the right. */
+    private void drawOrbitDashboard(Canvas c) {
+        moiDate.setColor(moiSecondary());
+        moiTime.setColor(moiPrimary());
+        moiSection.setColor(moiPrimary());
+        Paint clock = Ui.numbers(Ui.thin, 98 * k, moiPrimary());
+        c.drawText(clockText, MOI_LEFT * k, 143 * k, clock);
+        c.drawText(dateText.toUpperCase(Ui.locale()), MOI_LEFT * k, 184 * k, moiDate);
+        RectF apps = new RectF(moiAppsLeft() * k, MOI_TOP * k, moiAppsRight() * k, MOI_APPS_BOTTOM * k);
+        RectF weather = new RectF(moiWidgetLeft() * k, MOI_TOP * k, moiWeatherRight() * k, MOI_BOTTOM * k);
+        drawOrbitSurface(c, weather);
+        border.setColor(moiLight() ? 0x33314B69 : 0x446F8DAA);
+        border.setStrokeWidth(1 * k);
+        c.drawLine(apps.left, apps.top, apps.left, apps.bottom, border);
+        border.setStrokeWidth(2 * k);
+        c.drawText(Ui.tr("Your apps"), apps.left + 34 * k, apps.top + 52 * k, moiSection);
+        drawMoiWeather(c, weather);
+        c.drawText(Ui.tr("Inputs"), MOI_LEFT * k, MOI_INPUT_TITLE * k, moiSection);
+        int top = -1;
+        for (int i = 0; i < drawerItems.size(); i++)
+            if (drawerFocus[i].value > 0.02f && (top < 0 || drawerFocus[i].value > drawerFocus[top].value)) top = i;
+        for (int i = 0; i < drawerItems.size(); i++) if (i != top) drawDrawerTile(c, i);
+        if (top >= 0) drawDrawerTile(c, top);
+    }
+
+    private void drawOrbitSurface(Canvas c, RectF r) {
+        float radius = 28 * k;
+        fill.setShader(null);
+        fill.setColor(moiLight() ? 0xDDF8FAFD : 0xB5121D2C);
+        c.drawRoundRect(r, radius, radius, fill);
+        border.setColor(moiLight() ? 0x33314B69 : 0x557D9DBD);
+        border.setStrokeWidth(1.5f * k);
+        c.drawRoundRect(r, radius, radius, border);
+        border.setStrokeWidth(2 * k);
     }
 
     /** The inputs are part of Moi's home composition, not a second screen below it. */
@@ -3362,7 +3480,11 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         float radius = 30 * k;
         // A frosted surface should be perceived from the light it catches, not from a hard rectangle around it.
         // Do not paint a literal reflection strip here: on several Sony compositor paths it resolves into visible bands.
-        drawerGlass(c, r, radius, 0.56f, 0x32000000, 13 * k);
+        if (moiLight()) {
+            fill.setShader(null);
+            fill.setColor(0xDDFBFDFF);
+            c.drawRoundRect(r, radius, radius, fill);
+        } else drawerGlass(c, r, radius, 0.56f, 0x32000000, 13 * k);
         border.setColor(moiGlassEdge());
         border.setStrokeWidth(1.1f * k);
         c.drawRoundRect(r, radius, radius, border);

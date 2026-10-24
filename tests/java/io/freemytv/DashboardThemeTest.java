@@ -13,6 +13,11 @@ public final class DashboardThemeTest {
     public static void main(String[] args) {
         check("moi-dark".equals(DashboardTheme.normalize("moi-dark")), "accept the Moi Dark theme");
         check("moi-light".equals(DashboardTheme.normalize("moi-light")), "accept the Moi Light theme");
+        check("orbit-dark".equals(DashboardTheme.normalize("orbit-dark")), "accept the Orbit design");
+        check("orbit-dark".equals(DashboardTheme.normalize("studio-dark")), "migrate the discarded Studio design to Orbit");
+        check(DashboardTheme.isDashboard("orbit-light") && DashboardTheme.isLight("orbit-light", true),
+                "Orbit Light uses the dashboard renderer and keeps readable dark text at night");
+        check(!DashboardTheme.isLight("orbit-dark", false), "Orbit Dark keeps light text by day");
         check("moi-dark".equals(DashboardTheme.normalize("moi")), "migrate the early Moi theme to Moi Dark");
         check("light".equals(DashboardTheme.normalize("light")) && "dark".equals(DashboardTheme.normalize("dark")),
                 "keep existing light and dark themes");
